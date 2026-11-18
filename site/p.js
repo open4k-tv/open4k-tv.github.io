@@ -155,7 +155,7 @@
             fallback('');
         }
     }
-}('41a2fc3058ee133339c25944a95ea6be60220775a915f3559366eafb4384eb73'));
+}('e0e7004b53bc0be2bed5c8fa010d9ad89bc0cba85175efc8728e7a654b9569eb'));
 
 (function () {
     'use strict';
@@ -550,6 +550,8 @@
         var original = movie.original_title || movie.original_name;
         var normalized = [normalizeTitle(primary), normalizeTitle(original)];
         var year = Number(String(movie.first_air_date || movie.release_date || '').slice(0, 4));
+        function words(title) { return title.split(' ').sort().join(' '); }
+        var unordered = year ? normalized.map(words) : [];
         var queries = [primary];
         if (normalized[1] && normalized[0] !== normalized[1]) queries.push(original.trim());
 
@@ -566,7 +568,7 @@
                     if (release.type && (release.type.value === 'MOVIE') === isSeries(movie)) return false;
                     return [release.name.main, release.name.english, release.name.alternative].some(function (name) {
                         var match = normalizeTitle(name);
-                        return match && normalized.indexOf(match) !== -1;
+                        return match && (normalized.indexOf(match) !== -1 || unordered.indexOf(words(match)) !== -1);
                     });
                 }) : [];
                 if (matches.length === 1) readJson(aniLibertyApi + '/anime/releases/' + matches[0].id, done);
@@ -621,6 +623,38 @@
     function archiveLicense(value) {
         return typeof value === 'string' &&
             /^https?:\/\/(?:www\.)?creativecommons\.org\/(?:publicdomain\/(?:mark|zero)\/1\.0|licenses\/by(?:-nc)?(?:-sa|-nd)?\/[0-9.]+)\/?$/i.test(value);
+    }
+
+    function playArchive(title, url) {
+        var listener = lampa.Player.listener;
+        var videoPlayer = lampa.PlayerVideo;
+        if (listener && videoPlayer && typeof videoPlayer.video === 'function') {
+            var timer = window.setTimeout(detach, 20000);
+            listener.follow('start', prepare);
+        }
+        play(title, url);
+
+        function detach() {
+            window.clearTimeout(timer);
+            listener.remove('start', prepare);
+        }
+
+        function prepare(item) {
+            if (!item || item.url !== url) return;
+            detach();
+            var video = videoPlayer.video();
+            if (!video || video.tagName !== 'VIDEO' || !video.hasAttribute('crossorigin')) return;
+
+            // Archive downloads can redirect to servers that support ordinary video playback without CORS.
+            var previous = video.getAttribute('crossorigin');
+            video.removeAttribute('crossorigin');
+            listener.follow('destroy', restore);
+
+            function restore() {
+                listener.remove('destroy', restore);
+                video.setAttribute('crossorigin', previous);
+            }
+        }
     }
 
     function archiveFiles(item, id, runtime) {
@@ -679,7 +713,7 @@
                         return {
                             title: resolution ? 'MP4 · ' + resolution : 'MP4',
                             subtitle: 'Internet Archive',
-                            action: function () { play(cardTitle(movie), file.url); }
+                            action: function () { playArchive(cardTitle(movie), file.url); }
                         };
                     });
                     done(rows.length ? {
