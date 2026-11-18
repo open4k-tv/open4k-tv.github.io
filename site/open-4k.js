@@ -83,7 +83,7 @@
             finish();
         }
     }
-}('083cde61f375f25121505e30eb48af4fd92b94899fea86dbae8f4668a1f49774'));
+}('82ad10917825d1c93372b01b4587b1a8eceddf1eb1748519184c40e5c83214a5'));
 (function () {
     'use strict';
 
@@ -201,12 +201,14 @@
             if (!window.Lampa.Component.get('open4k_sources')) {
                 lampa.Component.add('open4k_sources', function (options) {
                     var root = window.$('<div class="scroll open4k-sources"></div>').css({
-                        height: '100%', overflowY: 'auto', padding: '1.5em', boxSizing: 'border-box'
+                        display: 'block', height: '100%', overflowY: 'auto', padding: '1.5em', boxSizing: 'border-box'
                     });
                     var last;
                     this.create = function () {
                         (options.rows || []).forEach(function (row) {
-                            var button = window.$('<div class="selector settings-param"></div>').appendTo(root);
+                            var button = window.$('<div class="selector settings-param"></div>').css({
+                                width: '100%', maxWidth: '42em', marginBottom: '0.45em', boxSizing: 'border-box'
+                            }).appendTo(root);
                             window.$('<div class="settings-param__name"></div>').text(row.title).appendTo(button);
                             if (row.subtitle) window.$('<div class="settings-param__descr"></div>').text(row.subtitle).appendTo(button);
                             button.on('hover:focus', function () { last = this; this.scrollIntoView({block: 'nearest'}); });
