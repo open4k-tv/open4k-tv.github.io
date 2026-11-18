@@ -155,7 +155,7 @@
             fallback('');
         }
     }
-}('e0e7004b53bc0be2bed5c8fa010d9ad89bc0cba85175efc8728e7a654b9569eb'));
+}('e7e399fcd08b7d38f85d6a892ac1f8eb761e77d811303d5126df4f1e6d9ba40c'));
 
 (function () {
     'use strict';
@@ -626,35 +626,41 @@
     }
 
     function playArchive(title, url) {
-        var listener = lampa.Player.listener;
-        var videoPlayer = lampa.PlayerVideo;
-        if (listener && videoPlayer && typeof videoPlayer.video === 'function') {
-            var timer = window.setTimeout(detach, 20000);
-            listener.follow('start', prepare);
-        }
-        play(title, url);
-
-        function detach() {
-            window.clearTimeout(timer);
-            listener.remove('start', prepare);
+        var avPlay = lampa.Platform && lampa.Platform.is('tizen') &&
+            lampa.Storage.field && lampa.Storage.field('player') === 'tizen';
+        if (avPlay || !lampa.Modal || typeof lampa.Modal.open !== 'function') {
+            play(title, url);
+            return;
         }
 
-        function prepare(item) {
-            if (!item || item.url !== url) return;
-            detach();
-            var video = videoPlayer.video();
-            if (!video || video.tagName !== 'VIDEO' || !video.hasAttribute('crossorigin')) return;
+        // Archive downloads may redirect to a media server without CORS.
+        var video = document.createElement('video');
+        video.title = title;
+        video.controls = true;
+        video.autoplay = true;
+        video.setAttribute('playsinline', '');
+        video.style.cssText = 'display:block;width:100%;height:62vh;background:#000';
+        video.addEventListener('error', function () {
+            if (video.hasAttribute('src')) lampa.Noty.show('Не удалось открыть этот файл Internet Archive');
+        });
+        video.src = url;
 
-            // Archive downloads can redirect to servers that support ordinary video playback without CORS.
-            var previous = video.getAttribute('crossorigin');
-            video.removeAttribute('crossorigin');
-            listener.follow('destroy', restore);
-
-            function restore() {
-                listener.remove('destroy', restore);
-                video.setAttribute('crossorigin', previous);
-            }
+        function close() {
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            lampa.Modal.close();
+            lampa.Controller.toggle('content');
         }
+
+        lampa.Modal.open({
+            title: 'Internet Archive',
+            html: window.$(video),
+            size: 'large',
+            buttons_position: 'outside',
+            buttons: [{ name: 'Закрыть', onSelect: close }],
+            onBack: close
+        });
     }
 
     function archiveFiles(item, id, runtime) {
