@@ -4,23 +4,14 @@
     if (!window.Lampa || window.open4kPages || window.open4kPluginLoaded) return;
 
     var installation = document.currentScript;
-    var baseUrl = installationBase(installation && installation.src);
+    var baseUrl = installationBase(installation && installation.src) || 'https://open4k-tv.github.io/';
     var version = bundledVersion;
     var pendingRuntime = null;
-    var pendingCheck = null;
-    var storage;
-    var parseMirror;
-    var mirrorKey;
-    var publishedAt = 0;
-    var readLanding;
-    var checkInterval = 2 * 60 * 1000;
-    var staleAfter = 2 * 60 * 60 * 1000;
+    var checking = false;
+    var started = false;
 
     var host = window.open4kPages = {
         runtime: null,
-        mirror: '',
-        fresh: false,
-        checking: false,
         publish: function (script, runtime) {
             if (!host.runtime && script === installation) {
                 host.runtime = runtime;
@@ -32,32 +23,16 @@
             version = pendingRuntime.version;
             return true;
         },
-        start: function (pluginStorage, normalizeMirror, storageKey, fallbackCheck) {
-            if (storage) return;
-            storage = pluginStorage;
-            parseMirror = normalizeMirror;
-            mirrorKey = storageKey;
-            readLanding = fallbackCheck;
-            host.mirror = parseMirror(storage.get(mirrorKey, ''));
-            publishedAt = Number(storage.get(mirrorKey + '_published_at', 0)) || 0;
+        start: function () {
+            if (started) return;
+            started = true;
 
-            // Lampa can restore an inline copy from its plugin cache during a network outage.
-            if (!baseUrl) {
-                var installed = storage.get('plugins', []) || [];
-                for (var i = 0; i < installed.length && !baseUrl; i++) {
-                    var plugin = installed[i];
-                    if (plugin && plugin.status !== 0 && plugin.status !== false) {
-                        baseUrl = installationBase(typeof plugin === 'string' ? plugin : plugin.url);
-                    }
-                }
-            }
             refresh();
-            window.setInterval(refresh, checkInterval);
+            window.setInterval(refresh, 2 * 60 * 1000);
             document.addEventListener('visibilitychange', function () {
                 if (!document.hidden) refresh();
             });
-        },
-        refresh: refresh
+        }
     };
 
     function installationBase(src) {
@@ -86,135 +61,38 @@
         document.head.appendChild(script);
     }
 
-    function refresh(done) {
-        if (pendingCheck) {
-            if (typeof done === 'function') pendingCheck.push(done);
-            return;
-        }
-        pendingCheck = typeof done === 'function' ? [done] : [];
-        host.checking = true;
+    function refresh() {
+        if (checking) return;
+        checking = true;
 
-        function finish(origin, fresh) {
-            host.checking = false;
-            host.fresh = fresh;
-            if (origin && origin !== host.mirror) {
-                host.mirror = origin;
-                try { storage.set(mirrorKey, origin); } catch (error) { /* Keep the session address. */ }
-            }
-            var callbacks = pendingCheck;
-            pendingCheck = null;
-            callbacks.forEach(function (callback) { callback(fresh ? origin : ''); });
-        }
+        function finish() { checking = false; }
 
-        function fallback(origin, rememberPublication) {
-            readLanding(function (direct) {
-                if (rememberPublication) rememberPublication();
-                finish(direct || origin, Boolean(direct));
-            });
-        }
-
-        if (!baseUrl) {
-            fallback('');
-            return;
-        }
-
-        var request = new XMLHttpRequest();
         try {
+            var request = new XMLHttpRequest();
             request.open('GET', baseUrl + 'release.json?check=' + Date.now(), true);
             request.timeout = 5000;
             request.onload = function () {
+                finish();
                 var release;
                 try { if (request.status === 200) release = JSON.parse(request.responseText); } catch (error) {}
-                if (!release || typeof release !== 'object') {
-                    fallback('');
-                    return;
-                }
-
-                loadRuntime(release.version);
-                var origin = parseMirror(release.mirror);
-                var checkedAt = Number(release.mirrorUpdatedAt) || 0;
-                var isNew = origin && checkedAt > publishedAt;
-
-                function rememberPublication() {
-                    if (!isNew) return;
-                    publishedAt = checkedAt;
-                    try { storage.set(mirrorKey + '_published_at', publishedAt); } catch (error) {}
-                }
-
-                var verified = release.mirrorVerified === true && checkedAt > 0 && Date.now() - checkedAt < staleAfter;
-                if (origin && verified && (isNew || (origin === host.mirror && checkedAt === publishedAt))) {
-                    rememberPublication();
-                    finish(origin, true);
-                } else {
-                    fallback(isNew ? origin : host.mirror || origin, rememberPublication);
-                }
+                if (release && typeof release === 'object') loadRuntime(release.version);
             };
-            request.onerror = request.ontimeout = function () { fallback(''); };
+            request.onerror = request.ontimeout = request.onabort = finish;
             request.send();
         } catch (error) {
-            fallback('');
+            finish();
         }
     }
-}('e7e399fcd08b7d38f85d6a892ac1f8eb761e77d811303d5126df4f1e6d9ba40c'));
-
+}('b561dc170bf787a30413e2e2f44041318bb390074e518cd9e0fd639ce1d6a6e2'));
 (function () {
     'use strict';
-
-    var mirrorPage = 'https://fanfilmzerkalo.fun/';
-
-    function mirrorOrigin(value) {
-        if (typeof value !== 'string') return '';
-        var match = /^(?:https:)?\/\/((?:[a-z0-9-]+\.)*fanfilm4k\.(?:media|run))(?=[/?#]|$)/i.exec(value.trim());
-        return match ? 'https://' + match[1].toLowerCase() : '';
-    }
-
-    function mirrorFromHtml(html) {
-        var anchors = /<a(?=\s|>)((?:[^"'<>]|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/a\s*>/gi;
-        var markup = html.replace(/<!--[\s\S]*?-->|<(script|style|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
-        var candidates = [];
-        var buttons = [];
-        var anchor;
-
-        while ((anchor = anchors.exec(markup))) {
-            var attributes = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+)))?/g;
-            var attribute;
-            while ((attribute = attributes.exec(anchor[1]))) {
-                if (attribute[1].toLowerCase() !== 'href') continue;
-
-                var origin = mirrorOrigin(attribute[2] || attribute[3] || attribute[4]);
-                if (!origin) break;
-
-                var label = anchor[2].replace(/<[^>]*>/g, '').replace(/&nbsp;|&#160;/gi, ' ').trim();
-                if (candidates.indexOf(origin) === -1) candidates.push(origin);
-                if (/^открыть\s+сайт$/i.test(label) && buttons.indexOf(origin) === -1) buttons.push(origin);
-                break;
-            }
-        }
-
-        var advertised = buttons.length ? buttons : candidates;
-        return advertised.length === 1 ? advertised[0] : '';
-    }
-
-    // Share the same mirror parser with the local server while keeping the TV script standalone.
-    if (typeof window === 'undefined' && typeof module === 'object') {
-        module.exports = { mirrorPage: mirrorPage, mirrorOrigin: mirrorOrigin, mirrorFromHtml: mirrorFromHtml };
-        return;
-    }
 
     var lampa = window.Lampa;
     var pagesHost = window.open4kPages;
     if (!lampa || (window.open4kPluginLoaded && !pagesHost)) return;
 
-    var scriptUrl = document.currentScript && document.currentScript.src;
-    var resolverUrl = /^https?:\/\//i.test(scriptUrl || '') ?
-        scriptUrl.split(/[?#]/)[0].replace(/[^/]+$/, 'fanfilm/mirror') : '';
-    var mirrorStorageKey = 'open4k_fanfilm_origin';
-    var fallbackMirror = 'https://v17.fanfilm4k.media';
     var aniLibertyApi = 'https://api.anilibria.app/api/v1';
     var archive = 'https://archive.org';
-    var fanfilmMirror = '';
-    var mirrorCheck = null;
-    var mirrorFresh = false;
     var cardRequest = 0;
 
     var menuTitle = 'Открытое 4K';
@@ -279,14 +157,14 @@
 
     function youtubeStream(id) {
         return {
-            title: 'Смотреть на YouTube',
+            title: 'Воспроизвести',
             subtitle: 'Качество выбирает YouTube',
             url: 'https://www.youtube.com/watch?v=' + id
         };
     }
 
     function play(title, url) {
-        lampa.Player.play({ title: title, url: url });
+        lampa.Player.play({ title: title, url: url, launch_player: 'lampa' });
     }
 
     function readResponse(url, timeout, read, done) {
@@ -295,113 +173,19 @@
             request.open('GET', url, true);
             request.timeout = timeout;
             request.onload = function () {
-                var origin = '';
+                var result = '';
                 try {
-                    if (request.status >= 200 && request.status < 300) origin = read(request);
+                    if (request.status >= 200 && request.status < 300) result = read(request);
                 } catch (error) {
-                    // A broken response must never replace the saved origin.
+                    // Invalid provider responses count as an unavailable source.
                 }
-                done(origin);
+                done(result);
             };
             request.onerror = request.ontimeout = function () { done(''); };
             request.send();
         } catch (error) {
             done('');
         }
-    }
-
-    function readLanding(done) {
-        readResponse(mirrorPage + '?check=' + Date.now(), 3500, function (request) {
-            return mirrorOrigin(request.responseURL) || mirrorFromHtml(request.responseText);
-        }, done);
-    }
-
-    function refreshFanfilm(onComplete) {
-        if (pagesHost) {
-            pagesHost.refresh(onComplete);
-            return;
-        }
-        if (mirrorCheck) {
-            if (onComplete) mirrorCheck.push(onComplete);
-            return;
-        }
-        mirrorCheck = onComplete ? [onComplete] : [];
-
-        function finish(origin) {
-            mirrorFresh = Boolean(origin);
-            if (origin && origin !== fanfilmMirror) {
-                fanfilmMirror = origin;
-                try {
-                    lampa.Storage.set(mirrorStorageKey, origin);
-                } catch (error) {
-                    // The new address still works in this session if storage is unavailable.
-                }
-            }
-            var listeners = mirrorCheck;
-            mirrorCheck = null;
-            listeners.forEach(function (callback) { callback(origin); });
-        }
-
-        if (!resolverUrl) {
-            readLanding(finish);
-            return;
-        }
-
-        readResponse(resolverUrl + '?check=' + Date.now(), 5500, function (request) {
-            return mirrorOrigin(JSON.parse(request.responseText).url);
-        }, function (origin) {
-            if (origin) finish(origin);
-            else readLanding(finish);
-        });
-    }
-
-    function openFanfilmPage(url) {
-        if (lampa.Android && typeof lampa.Android.openBrowser === 'function' &&
-            window.AndroidJS && typeof window.AndroidJS.openBrowser === 'function') {
-            lampa.Android.openBrowser(url);
-            return;
-        }
-        window.location.assign(url);
-    }
-
-    function activeMirror() {
-        return (pagesHost ? pagesHost.mirror : fanfilmMirror) || fallbackMirror;
-    }
-
-    function showFanfilm(controller) {
-        var saved = pagesHost ? pagesHost.mirror : fanfilmMirror;
-        var checking = pagesHost ? pagesHost.checking : mirrorCheck;
-        var fresh = pagesHost ? pagesHost.fresh : mirrorFresh;
-        var status = 'Адрес из предыдущей проверки';
-        if (checking) status = 'Проверяем зеркало';
-        else if (fresh) status = 'Адрес получен со страницы зеркал';
-        else if (!saved) status = 'Последний известный адрес';
-
-        showPicker('FanFilm4K', [
-            {
-                title: 'Открыть каталог',
-                subtitle: status + ' · ' + activeMirror(),
-                action: function () { openFanfilmPage(activeMirror() + '/'); }
-            },
-            {
-                title: 'Фильмы 4K UHD',
-                subtitle: 'Откроется сайт FanFilm4K',
-                action: function () { openFanfilmPage(activeMirror() + '/4k-films/'); }
-            },
-            {
-                title: 'Обновить зеркало',
-                action: function () {
-                    lampa.Noty.show('Проверяем адрес FanFilm4K…');
-                    refreshFanfilm(function (origin) {
-                        lampa.Noty.show(origin ? 'Зеркало FanFilm4K: ' + origin : 'Проверка не удалась. Попробуй последний адрес или страницу зеркал.');
-                    });
-                }
-            },
-            {
-                title: 'Страница зеркал',
-                action: function () { openFanfilmPage(mirrorPage); }
-            }
-        ], controller, function () { showCatalog(controller); });
     }
 
     function showPicker(title, items, controller, onBack) {
@@ -482,14 +266,7 @@
             };
         }
 
-        var items = [
-            {
-                title: 'FanFilm4K',
-                subtitle: 'Фильмы, сериалы и мультфильмы · плеер сайта',
-                action: function () { showFanfilm(controller); }
-            },
-            { title: 'Открытые короткометражки', separator: true }
-        ].concat(films.map(filmRow));
+        var items = [{ title: 'Открытые короткометражки', separator: true }].concat(films.map(filmRow));
         items.push({ title: 'Полнометражное кино', separator: true });
         items = items.concat(mosfilm.map(filmRow));
         if (lampa.Input && typeof lampa.Input.edit === 'function') {
@@ -606,7 +383,8 @@
                             lampa.Player.play({
                                 title: cardTitle(movie) + ' · ' + title,
                                 url: streams['1080p'] || streams['720p'] || streams['480p'],
-                                quality: streams
+                                quality: streams,
+                                launch_player: 'lampa'
                             });
                         }
                     });
@@ -732,19 +510,32 @@
         });
     }
 
+    function installedOnlineMod(movie) {
+        var manifest = window.Lampa.Manifest;
+        var plugins = manifest && manifest.plugins;
+        if (!Array.isArray(plugins)) return null;
+        var online = plugins.filter(function (plugin) {
+            return plugin && plugin.component === 'online_mod' && typeof plugin.onContextLauch === 'function';
+        })[0];
+        return online ? {
+            title: 'Online Mod',
+            subtitle: 'Источники установленного плагина',
+            action: function () { online.onContextLauch(movie); }
+        } : null;
+    }
+
     function showCardSources(movie, sources) {
+        if (!sources.length) {
+            lampa.Noty.show('Для этой карточки нет доступных источников');
+            return;
+        }
         function show() { showPicker(cardTitle(movie), rows, 'content'); }
-        var rows = sources.filter(Boolean).map(function (source) {
+        var rows = sources.map(function (source) {
             return {
                 title: source.title,
                 subtitle: source.subtitle,
                 action: function () { source.action(show); }
             };
-        });
-        rows.push({
-            title: 'Открыть каталог FanFilm4K',
-            subtitle: 'Найди фильм или сериал по названию на сайте',
-            action: function () { openFanfilmPage(activeMirror() + '/'); }
         });
         show();
     }
@@ -752,8 +543,14 @@
     function openCard(movie) {
         var request = ++cardRequest;
         var film = findFilm(movie);
+        var onlineMod = installedOnlineMod(movie);
         if (film) {
-            showFilm(film, 'content');
+            if (onlineMod) {
+                showCardSources(movie, [{
+                    title: film.credit,
+                    action: function (back) { showFilm(film, 'content', back); }
+                }, onlineMod]);
+            } else showFilm(film, 'content');
             return;
         }
 
@@ -762,20 +559,20 @@
         if (isAnimation(movie)) lookups.push(function (done) { aniLibertySource(movie, done); });
         if (!isSeries(movie) && year > 0) lookups.push(function (done) { archiveSource(movie, year, done); });
         if (!lookups.length) {
-            showCardSources(movie, []);
+            showCardSources(movie, onlineMod ? [onlineMod] : []);
             return;
         }
 
         var active = lampa.Activity && typeof lampa.Activity.active === 'function' ? lampa.Activity.active : null;
         var current = active && active();
-        var results = [];
+        var results = onlineMod ? [onlineMod] : [];
         var pending = lookups.length;
         lampa.Noty.show('Ищем доступные источники…');
         lookups.forEach(function (lookup, index) {
             lookup(function (result) {
-                results[index] = result;
+                results[index + (onlineMod ? 1 : 0)] = result;
                 if (--pending === 0 && request === cardRequest && (!active || active() === current)) {
-                    showCardSources(movie, results);
+                    showCardSources(movie, results.filter(Boolean));
                 }
             });
         });
@@ -811,13 +608,7 @@
         lampa.Listener.follow('full', function (event) {
             (pagesHost ? pagesHost.runtime.addCardButton : addCardButton)(event);
         });
-        // The extension installer looks for a direct reference to the Lampa API.
-        var storage = window.Lampa.Storage;
-        if (pagesHost) pagesHost.start(storage, mirrorOrigin, mirrorStorageKey, readLanding);
-        else {
-            fanfilmMirror = mirrorOrigin(storage.get(mirrorStorageKey, ''));
-            refreshFanfilm();
-        }
+        if (pagesHost) pagesHost.start();
     }
 
     if (pagesHost && !pagesHost.publish(document.currentScript, {
