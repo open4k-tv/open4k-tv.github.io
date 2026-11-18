@@ -155,7 +155,7 @@
             fallback('');
         }
     }
-}('6654425911f033eb829d68d007b27207601c039348ccf8d9121c0ab5e43540fc'));
+}('39006b824ccb56938288ff75bb83957af8df2411006934df1a55db9542bd4df6'));
 
 (function () {
     'use strict';
@@ -511,16 +511,33 @@
         })[0];
     }
 
+    function cardTitle(movie) {
+        if (movie.media_type === 'person') return '';
+        var titles = [movie.title, movie.name, movie.original_title, movie.original_name];
+        for (var i = 0; i < titles.length; i++) {
+            if (typeof titles[i] === 'string' && titles[i].trim()) return titles[i].trim();
+        }
+        return '';
+    }
+
     function openCard(movie) {
         var film = findFilm(movie);
-        if (film) showFilm(film, 'content');
-        else lampa.Noty.show('У этого фильма больше нет источника в Открытом 4K.');
+        if (film) {
+            showFilm(film, 'content');
+            return;
+        }
+
+        showPicker(cardTitle(movie), [{
+            title: 'Открыть каталог FanFilm4K',
+            subtitle: 'Найди фильм или сериал по названию на сайте',
+            action: function () { openFanfilmPage(activeMirror() + '/'); }
+        }], 'content');
     }
 
     function addCardButton(event) {
         if (event.type !== 'complite' || !event.body || !event.data || !event.data.movie) return;
         var movie = event.data.movie;
-        if (!findFilm(movie) || event.body.find('.open4k-card-button').length) return;
+        if (!cardTitle(movie) || event.body.find('.open4k-card-button').length) return;
 
         var buttons = event.body.find('.buttons--container').first();
         if (!buttons.length) buttons = event.body.find('.full-start__buttons').first();
