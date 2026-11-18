@@ -155,7 +155,7 @@
             fallback('');
         }
     }
-}('66d71534b9548c523a27c3ad5a30aac391e5414d0dc60efde9b8fa152e801ea4'));
+}('6654425911f033eb829d68d007b27207601c039348ccf8d9121c0ab5e43540fc'));
 
 (function () {
     'use strict';
@@ -547,9 +547,11 @@
         lampa.Listener.follow('full', function (event) {
             (pagesHost ? pagesHost.runtime.addCardButton : addCardButton)(event);
         });
-        if (pagesHost) pagesHost.start(lampa.Storage, mirrorOrigin, mirrorStorageKey, readLanding);
+        // The extension installer looks for a direct reference to the Lampa API.
+        var storage = window.Lampa.Storage;
+        if (pagesHost) pagesHost.start(storage, mirrorOrigin, mirrorStorageKey, readLanding);
         else {
-            fanfilmMirror = mirrorOrigin(lampa.Storage.get(mirrorStorageKey, ''));
+            fanfilmMirror = mirrorOrigin(storage.get(mirrorStorageKey, ''));
             refreshFanfilm();
         }
     }
