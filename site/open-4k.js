@@ -83,7 +83,7 @@
             finish();
         }
     }
-}('3f401dfb31c6c2931cbcc4b398bce7972d6eaf3568ebea4dcb5b8cec941fb3ad'));
+}('083cde61f375f25121505e30eb48af4fd92b94899fea86dbae8f4668a1f49774'));
 (function () {
     'use strict';
 
@@ -110,8 +110,15 @@
             credit: 'Blender Foundation, версия Sunflower — Janus B. Kristensen · CC BY 3.0',
             streams: [
                 { title: '4K · 3840×2160', subtitle: 'MP4 · H.264 · 30 кадров/с', url: bunny + '2160p_30fps_normal.mp4' },
+                { title: 'Akamai · до 3840×2160', subtitle: 'DASH · H.264', url: 'https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd' },
                 { title: 'Full HD', subtitle: 'MP4 · H.264 · 30 кадров/с', url: bunny + '1080p_30fps_normal.mp4' }
             ]
+        },
+        {
+            title: 'Sintel',
+            year: 2010,
+            credit: 'Blender Foundation · Shaka',
+            streams: [{ title: 'Shaka · до 3840×1636', subtitle: 'DASH · H.264', url: 'https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd' }]
         },
         commonsFilm('Tears of Steel', 2012, 'Blender Institute', '3.0', '3840×1714', 'VP8 / Vorbis',
             '1/10/', 'Tears_of_Steel_in_4k_-_Official_Blender_Foundation_release.webm', 'OHOpb2fS-cM'),
@@ -190,6 +197,45 @@
     }
 
     function showPicker(title, items, controller, onBack) {
+        if (controller === 'content' && lampa.Component && lampa.Activity && window.Navigator) {
+            if (!window.Lampa.Component.get('open4k_sources')) {
+                lampa.Component.add('open4k_sources', function (options) {
+                    var root = window.$('<div class="scroll open4k-sources"></div>').css({
+                        height: '100%', overflowY: 'auto', padding: '1.5em', boxSizing: 'border-box'
+                    });
+                    var last;
+                    this.create = function () {
+                        (options.rows || []).forEach(function (row) {
+                            var button = window.$('<div class="selector settings-param"></div>').appendTo(root);
+                            window.$('<div class="settings-param__name"></div>').text(row.title).appendTo(button);
+                            if (row.subtitle) window.$('<div class="settings-param__descr"></div>').text(row.subtitle).appendTo(button);
+                            button.on('hover:focus', function () { last = this; this.scrollIntoView({block: 'nearest'}); });
+                            button.on('hover:enter', function () { if (row.action) row.action(); });
+                        });
+                        this.activity.loader(false);
+                        this.activity.toggle();
+                        return root;
+                    };
+                    this.start = function () {
+                        lampa.Controller.add('content', {
+                            toggle: function () {
+                                lampa.Controller.collectionSet(root);
+                                lampa.Controller.collectionFocus(last || false, root);
+                            },
+                            up: function () { window.Navigator.move('up'); },
+                            down: function () { window.Navigator.move('down'); },
+                            back: function () { lampa.Activity.backward(); }
+                        });
+                        lampa.Controller.toggle('content');
+                    };
+                    this.render = function () { return root; };
+                    this.pause = this.stop = function () {};
+                    this.destroy = function () { root.remove(); };
+                });
+            }
+            lampa.Activity.push({ component: 'open4k_sources', title: title, rows: items });
+            return;
+        }
         var selected = false;
         lampa.Select.show({
             title: title,
@@ -350,6 +396,56 @@
         lampa.Player.play(video);
     }
 
+    function choosePlayback(title, media, hls) {
+        var dash = media.dasha || media.dash;
+        var validDash = typeof dash === 'string' &&
+            /^https:\/\/(?:[a-z0-9-]+\.)*interkh\.com\/[a-z0-9_./%-]+\.mpd(?:\?[^\s<>"'#\\]*)?$/i.test(dash);
+        var names = media.audio && media.audio.names;
+        function launch(url) {
+            if (!Array.isArray(names) || !names.length || !lampa.PlayerVideo || !lampa.Player.listener) {
+                collapsPlayback(title, media, url);
+                return;
+            }
+            var events = lampa.PlayerVideo.listener;
+            var voices = names.map(function (name, index) {
+                return { title: String(name).replace(/[<>]/g, ''), action: function () {
+                    function clear() {
+                        events.remove('tracks', select);
+                        lampa.Player.listener.remove('destroy', clear);
+                    }
+                    function select(event) {
+                        if (!event.tracks || !event.tracks[index]) return;
+                        clear();
+                        event.tracks[index].enabled = true;
+                        event.tracks[index].selected = true;
+                    }
+                    events.follow('tracks', select);
+                    lampa.Player.listener.follow('destroy', clear);
+                    collapsPlayback(title, media, url);
+                } };
+            });
+            showPicker('Озвучка · ' + title, voices, 'content');
+        }
+        if (!validDash) { launch(hls); return; }
+        readResponse(dash, 4000, function (req) {
+            var best = 0, label = '';
+            (req.responseText.match(/<Representation\b[^>]*>/gi) || []).forEach(function (tag) {
+                var w = /\bwidth="(\d+)"/.exec(tag), h = /\bheight="(\d+)"/.exec(tag);
+                if (w && h && Number(w[1]) > best) {
+                    best = Number(w[1]);
+                    label = w[1] + '×' + h[1];
+                }
+            });
+            return label;
+        }, function (resolution) {
+            if (!resolution) { launch(hls); return; }
+            showPicker('Качество · ' + title, [
+                { title: 'DASH · до ' + resolution, action: function () { launch(dash); } },
+                { title: 'HLS' + (media.resolution ? ' · до ' + media.resolution : ''), action: function () { launch(hls); } }
+            ], 'content');
+        });
+    }
+
     function collapsResult(html, movie) {
         // Read the published player configuration as data. The surrounding code belongs to the provider.
         var start = /\bmakePlayer\(\s*\{/.exec(html);
@@ -364,7 +460,8 @@
             var url = hls && collapsHls(hls[1]);
             if (!url) return null;
             var audio = /^\s*audio:\s*(\{[^\r\n]+\}),?\s*$/m.exec(source[1]);
-            return { url: url, audio: audio && JSON.parse(audio[1]) };
+            var dash = /^\s*dasha:\s*"([^"\r\n]+)"/m.exec(source[1]);
+            return { url: url, dash: dash && dash[1], audio: audio && JSON.parse(audio[1]) };
         }
 
         var seasons = /^\s*seasons:\s*(\[[^\r\n]*\])\s*[,}]?\s*$/m.exec(config);
@@ -386,8 +483,8 @@
         if (result.url) {
             return [{
                 title: 'Воспроизвести',
-                subtitle: result.resolution || 'HLS',
-                action: function () { collapsPlayback(title, result, result.url); }
+                subtitle: result.dash ? 'Выбрать качество и озвучку' : result.resolution || 'HLS',
+                action: function () { choosePlayback(title, result, result.url); }
             }];
         }
         return result.seasons.map(function (season) {
@@ -401,7 +498,7 @@
                         return {
                             title: label,
                             action: function () {
-                                collapsPlayback(title + ' · ' + name + ' · ' + label, episode, episode.hls);
+                                choosePlayback(title + ' · ' + name + ' · ' + label, episode, episode.hls);
                             }
                         };
                     });
@@ -650,20 +747,6 @@
         });
     }
 
-    function installedOnlineMod(movie) {
-        var manifest = window.Lampa.Manifest;
-        var plugins = manifest && manifest.plugins;
-        if (!Array.isArray(plugins)) return null;
-        var online = plugins.filter(function (plugin) {
-            return plugin && plugin.component === 'online_mod' && typeof plugin.onContextLauch === 'function';
-        })[0];
-        return online ? {
-            title: 'Online Mod',
-            subtitle: 'Источники установленного плагина',
-            action: function () { online.onContextLauch(movie); }
-        } : null;
-    }
-
     function showCardSources(movie, sources) {
         if (!sources.length) {
             lampa.Noty.show('Для этой карточки нет доступных источников');
@@ -680,12 +763,12 @@
         show();
     }
 
-    function alternativeSources(movie, onlineMod, done) {
+    function alternativeSources(movie, done) {
         var year = Number(String(movie.release_date || '').slice(0, 4));
         var lookups = [];
         if (isAnimation(movie)) lookups.push(function (next) { aniLibertySource(movie, next); });
         if (!isSeries(movie) && year > 0) lookups.push(function (next) { archiveSource(movie, year, next); });
-        var results = onlineMod ? [onlineMod] : [];
+        var results = [];
         if (!lookups.length) {
             done(results);
             return;
@@ -704,14 +787,8 @@
     function openCard(movie) {
         var request = ++cardRequest;
         var film = findFilm(movie);
-        var onlineMod = installedOnlineMod(movie);
         if (film) {
-            if (onlineMod) {
-                showCardSources(movie, [{
-                    title: film.credit,
-                    action: function (back) { showFilm(film, 'content', back); }
-                }, onlineMod]);
-            } else showFilm(film, 'content');
+            showFilm(film, "content");
             return;
         }
 
@@ -719,17 +796,17 @@
         var current = activity && activity.active();
         var cachedAlternatives;
         function isCurrent() {
-            return request === cardRequest && (!activity || activity.active() === current);
+            return request === cardRequest && (!activity || activity.active() === current || (activity.active() || {}).component === "open4k_sources");
         }
         function getAlternatives(done) {
             if (cachedAlternatives) done(cachedAlternatives);
-            else alternativeSources(movie, onlineMod, function (sources) {
+            else alternativeSources(movie, function (sources) {
                 cachedAlternatives = sources;
                 done(sources);
             });
         }
         function preferred(source) {
-            var canSearchAlternatives = onlineMod || isAnimation(movie) || (!isSeries(movie) && movie.release_date);
+            var canSearchAlternatives = isAnimation(movie) || (!isSeries(movie) && movie.release_date);
             source.action(null, canSearchAlternatives ? function () { alternatives(source); } : null);
         }
         function alternatives(primary) {
@@ -758,7 +835,9 @@
             getAlternatives(function (sources) {
                 if (!isCurrent()) return;
                 if (sources.some(function (source) { return source.title === 'AniLiberty'; })) {
-                    showCardSources(movie, sources);
+                    collapsSource(movie, collapsIds(movie), function (online) {
+                        if (isCurrent()) showCardSources(movie, online ? sources.concat(online) : sources);
+                    });
                 } else findOnline(collapsIds(movie));
             });
             return;
