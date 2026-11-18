@@ -155,7 +155,7 @@
             fallback('');
         }
     }
-}('136ea7d6f0230624afd2c5041c9ea758f3a06dfcd635ee7ee14bd82de6355817'));
+}('41a2fc3058ee133339c25944a95ea6be60220775a915f3559366eafb4384eb73'));
 
 (function () {
     'use strict';
@@ -211,7 +211,7 @@
     var mirrorStorageKey = 'open4k_fanfilm_origin';
     var fallbackMirror = 'https://v17.fanfilm4k.media';
     var aniLibertyApi = 'https://api.anilibria.app/api/v1';
-    var vidSrc = 'https://vidsrc.sh';
+    var archive = 'https://archive.org';
     var fanfilmMirror = '';
     var mirrorCheck = null;
     var mirrorFresh = false;
@@ -618,54 +618,76 @@
         });
     }
 
-    function movieIdentifier(movie, source) {
-        if (typeof movie.imdb_id === 'string' && /^tt[0-9]{7,12}$/.test(movie.imdb_id)) return movie.imdb_id;
-        var id = movie.tmdb_id || ((source || movie.source) === 'tmdb' && movie.id);
-        return /^[1-9][0-9]{0,9}$/.test(id) ? String(id) : '';
+    function archiveLicense(value) {
+        return typeof value === 'string' &&
+            /^https?:\/\/(?:www\.)?creativecommons\.org\/(?:publicdomain\/(?:mark|zero)\/1\.0|licenses\/by(?:-nc)?(?:-sa|-nd)?\/[0-9.]+)\/?$/i.test(value);
     }
 
-    function openVidSrc(path, back) {
-        var frame = document.createElement('iframe');
-        frame.title = 'Плеер VidSrc';
-        frame.style.cssText = 'display:block;width:100%;height:62vh;border:0;background:#000';
-        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
-        frame.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture');
-        frame.setAttribute('allowfullscreen', '');
-        frame.setAttribute('referrerpolicy', 'origin');
-        frame.src = vidSrc + '/embed/' + path + '?ds_lang=ru';
-
-        function close() {
-            lampa.Modal.close();
-            back();
-        }
-
-        lampa.Modal.open({
-            title: 'VidSrc',
-            html: window.$(frame),
-            size: 'large',
-            buttons_position: 'outside',
-            buttons: [
-                { name: 'Перейти к плееру', onSelect: function () { frame.focus(); } },
-                { name: 'Назад к источникам', onSelect: close }
-            ],
-            onBack: close
+    function archiveFiles(item, id, runtime) {
+        if (!item || !item.metadata || !archiveLicense(item.metadata.licenseurl) || !Array.isArray(item.files)) return [];
+        return item.files.filter(function (file) {
+            var duration = Number(file && file.length);
+            return file && file.private !== true && file.private !== 'true' && file.private !== '1' &&
+                typeof file.name === 'string' && /^[^/\\\x00-\x1f]+\.mp4$/i.test(file.name) &&
+                (runtime ? Math.abs(duration - runtime) <= Math.min(600, runtime * 0.12) : duration >= 3000);
+        }).map(function (file) {
+            return {
+                url: archive + '/download/' + id + '/' + encodeURIComponent(file.name),
+                width: Number(file.width) || 0,
+                height: Number(file.height) || 0
+            };
         });
     }
 
-    function vidSrcSource(movie, id, done) {
-        var type = isSeries(movie) ? 'tv' : 'movie';
-        var path = type + '/' + id;
-        readJson(vidSrc + '/info/' + path + '.json', function (info) {
-            var sameId = info && String(id.indexOf('tt') === 0 ? info.imdb_id : info.tmdb_id) === id;
-            if (!sameId || info.type !== type || info.status_code !== 200) {
+    function archiveSource(movie, year, done) {
+        var original = normalizeTitle(movie.original_title) || normalizeTitle(cardTitle(movie));
+        var local = normalizeTitle(cardTitle(movie));
+        var titles = original === local ? [local] : [original, local];
+        var phrase = titles.map(function (title) { return 'title:"' + title.replace(/["\\]/g, ' ') + '"'; }).join(' OR ');
+        var query = 'mediatype:movies AND (' + phrase + ') AND year:' + year + ' AND licenseurl:*';
+        var url = archive + '/advancedsearch.php?q=' + encodeURIComponent(query) +
+            '&output=json&rows=12&sort[]=downloads%20desc&fl[]=title&fl[]=year&fl[]=licenseurl&fl[]=identifier';
+        readJson(url, function (result) {
+            var docs = result && result.response && result.response.docs;
+            var matching = Array.isArray(docs) ? docs.filter(function (doc) {
+                var title = normalizeTitle(doc && doc.title);
+                return doc && Number(doc.year) === year && /^\w[\w.-]{0,99}$/.test(doc.identifier) &&
+                    archiveLicense(doc.licenseurl) && titles.some(function (candidate) {
+                        return title === candidate || title === candidate + ' ' + year;
+                    });
+            }).slice(0, 3) : [];
+            var pending = matching.length;
+            if (!pending) {
                 done(null);
                 return;
             }
-            var quality = /^(\d{3,4}p|DVD|SD|CAM)$/.test(info.quality) ? info.quality : '';
-            done({
-                title: 'VidSrc',
-                subtitle: (quality ? quality + ' · ' : '') + 'Встроенный плеер',
-                action: function (back) { openVidSrc(path, back); }
+
+            var files = [];
+            matching.forEach(function (doc) {
+                readJson(archive + '/metadata/' + doc.identifier, function (item) {
+                    files = files.concat(archiveFiles(item, doc.identifier, Number(movie.runtime) * 60));
+                    if (--pending > 0) return;
+                    files.sort(function (a, b) { return b.width * b.height - a.width * a.height; });
+                    var seen = {};
+                    var rows = files.filter(function (file) {
+                        var resolution = file.width + '×' + file.height;
+                        if (seen[resolution]) return false;
+                        seen[resolution] = true;
+                        return true;
+                    }).slice(0, 5).map(function (file) {
+                        var resolution = file.width && file.height ? file.width + '×' + file.height : '';
+                        return {
+                            title: resolution ? 'MP4 · ' + resolution : 'MP4',
+                            subtitle: 'Internet Archive',
+                            action: function () { play(cardTitle(movie), file.url); }
+                        };
+                    });
+                    done(rows.length ? {
+                        title: 'Internet Archive',
+                        subtitle: 'Полный фильм · ' + rows[0].title,
+                        action: function (back) { showPicker(cardTitle(movie), rows, 'content', back); }
+                    } : null);
+                });
             });
         });
     }
@@ -687,7 +709,7 @@
         show();
     }
 
-    function openCard(movie, source) {
+    function openCard(movie) {
         var request = ++cardRequest;
         var film = findFilm(movie);
         if (film) {
@@ -695,12 +717,10 @@
             return;
         }
 
-        var id = movieIdentifier(movie, source);
+        var year = Number(String(movie.release_date || '').slice(0, 4));
         var lookups = [];
         if (isAnimation(movie)) lookups.push(function (done) { aniLibertySource(movie, done); });
-        if (id && lampa.Modal && typeof lampa.Modal.open === 'function') {
-            lookups.push(function (done) { vidSrcSource(movie, id, done); });
-        }
+        if (!isSeries(movie) && year > 0) lookups.push(function (done) { archiveSource(movie, year, done); });
         if (!lookups.length) {
             showCardSources(movie, []);
             return;
@@ -730,10 +750,9 @@
         if (!buttons.length) buttons = event.body.find('.full-start__buttons').first();
         if (!buttons.length) return;
 
-        var source = event.data.source || (event.props && event.props.source);
         window.$('<div class="full-start__button selector open4k-card-button">' + icon + '<span>' +
             menuTitle + '</span></div>')
-            .on('hover:enter', function () { (pagesHost ? pagesHost.runtime.openCard : openCard)(movie, source); })
+            .on('hover:enter', function () { (pagesHost ? pagesHost.runtime.openCard : openCard)(movie); })
             .appendTo(buttons);
     }
 
