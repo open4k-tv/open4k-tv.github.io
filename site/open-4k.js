@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('fc7d0907fca5e7cd83b03a0b615da2d0aeb3e5c911180601c7a0b047dc364cd1'));
+}('c47316ddd6782a02198d4327c8519813859aa8c64e52437d6b4122662dcdc201'));
 
 (function () {
     'use strict';
@@ -148,12 +148,6 @@
             'f/f2/', 'SINGULARITY_-_Blender_Open_Movie-full_movie.webm', 'l5OZu-IrXpw')
     ];
 
-    var mosfilm = [
-        studioFilm('Забытая мелодия для флейты', 1987, 'z7HDwZG9OFw'),
-        studioFilm('Служили два товарища', 1968, 'e7P3QbcI91U'),
-        studioFilm('Коммунист', 1957, 'es8MdRnBdJQ')
-    ];
-
     var classics = [
         archiveFeature('Шарада', 'Charade', 1963, 'charade-1963-4k', 'Charade (1963) 4K.mp4', '3840×2160'),
         archiveFeature('Ночь живых мертвецов', 'Night of the Living Dead', 1968, 'notld-4-k', 'NOTLD 4K.mp4', '2960×2160'),
@@ -172,228 +166,98 @@
         else play(film.title, stream.url);
     }
 
-    /* studio-index:start */
-    var studioIndex = [
-        ["\"Мосфильм - 100 лет в кино\"",2023,[["Qm81l4G2Y34","4ebd8fc7438cfc034fe8d2e5c6dd8517"]]],
-        ["“Мосфильм” в цифрах и фактах. История и современность легендарной киностудии",2020,[["QS9fdBv1Z7E",""]]],
-        ["А если это любовь?",1961,[["-2IhHYRXExU",""]]],
-        ["Автомобиль, скрипка и собака Клякса",1974,[["_Uf0uSOyULE",""]]],
-        ["Айболит-66",1966,[["QvQx78csrtw",""]]],
-        ["Александр Невский",1938,[["IKskdbazW7w",""]]],
-        ["Алые Паруса",1961,[["5YzwW4hxrx4",""]]],
-        ["Американская дочь",1995,[["1vAv28WLXkE","f594c020efcdbe4132ea5e9c8427427c"]]],
-        ["Андрей Рублев",1966,[["F3TUvRzrwPk","6b9e387390ff191bfcf1ff24ebee15f7"]]],
-        ["Анна Каренина (телесериал)",2017,[["s2FhGaDNeko",""],["FfnCI5BH8Tg",""],["Hm0iszGD-so",""],["bnM-qJLz7Zg",""],["9rD3yfO2ygM",""],["rHiSSYdDPps",""],["eC2gp_V2UDg",""],["iPMT1jLF3ps",""]]],
-        ["Анна Каренина (Четырёхсерийный фильм)",2017,[["vHV72dS1vkE","5115847ea90aa493dae6421289f36830"],["dkzgJzGUDzA","2b8e4afc36ff1c3c0da93007c2507bcb"],["KCUJgPkIMXw","0b73d5d4d1b2e7ed9866af1f9233733a"],["RpNTs5j3Ujo","1b6705254dcf9e0205f0ef17ce94e751"]]],
-        ["Анна Каренина. История Вронского",2017,[["ijqwV4wje_E",""]]],
-        ["Афоня",1975,[["L9HATyYkZLs",""]]],
-        ["Баллада о солдате",1959,[["H2ZFe7XGwt8",""]]],
-        ["Батальоны просят огня",1985,[["UsmBFet9SQU",""],["QeHEIxpHuiY",""],["46PS3Lb9C00",""],["BE2eWF25HtY",""]]],
-        ["Без страха и упрека",1962,[["oKxPNdrVwM8",""]]],
-        ["Безответная любовь",1979,[["-lkyvDXJVPs",""]]],
-        ["Безотцовщина",1976,[["XNlmEz7fYzo",""]]],
-        ["Белый Тигр",2012,[["G-z1-uHyaus",""]]],
-        ["Берегите мужчин!",1982,[["yUqXnQpbS1A",""]]],
-        ["Бессмертный гарнизон",1956,[["5w1t9eKJpKc",""]]],
-        ["Бешеные деньги",1981,[["7zJhNoX-Cs0",""]]],
-        ["Большой аттракцион",1974,[["cwCflkT13IU","93a932c7d55ae7404e6d8d19cf1c5f32"]]],
-        ["Борец и клоун",1957,[["QrmpWVWLOt0",""]]],
-        ["Братья Карамазовы",1968,[["z_U-juAzXik",""],["I4arxS-jvJc",""],["MKMkOX7znwk",""]]],
-        ["В зоне особого внимания",1977,[["0xqSmIBZHMM",""]]],
-        ["Василий и Василиса",1981,[["lKhDCvTriic",""]]],
-        ["Взлет",1979,[["HZGNwaP8iRY","22949ecd4e36c4abe450c4309529d927"]]],
-        ["Вий",1967,[["Amh3uudVMBo",""]]],
-        ["Владивосток",2021,[["Ty0ZpuDlzM4","6dd052a50f9a9d219092ef75f05f6607"]]],
-        ["Возмездие",1967,[["ICim4u2kRF0",""],["JSN3he99FMo",""]]],
-        ["Вокзал для двоих",1982,[["3g-p1d8H02o",""]]],
-        ["Восхождение",1976,[["VteY61FDhc8",""]]],
-        ["Время, вперед!",1965,[["RGZAzR4p3T4",""],["r__Z0Mz69wE",""]]],
-        ["Всадник по имени Смерть",2004,[["v83jD-ccNTU","5c68e7af4a9ffb61b2dc99548fdae625"]]],
-        ["Встреча на Эльбе",1949,[["ZymeUZuqsWo",""]]],
-        ["Вызываем огонь на себя",1963,[["WYWjVP8KGlM",""],["wvbVXHcFaQ0",""],["x4yzKCr6Guk",""],["CvpQbQmgIVY",""]]],
-        ["Город Зеро",1988,[["zbT53Q_olkU","6614062d41a92ae782d23fa26fdb4964"]]],
-        ["Горячий снег",1972,[["Ay-vJ4OUDjM",""]]],
-        ["Дамы приглашают кавалеров",1980,[["VypmP_Wq1dU",""]]],
-        ["Двенадцать стульев",1971,[["P8t2dbJ7YXY",""]]],
-        ["Девушка без адреса",1957,[["cEeMGnlihLY",""]]],
-        ["Девчата",1961,[["8CYY8EM5xYE","7358ddc35dd78d6f136be8e99f8be457"]]],
-        ["Деловые люди",1962,[["mPEpMflSsoM",""]]],
-        ["День полнолуния",1998,[["BY5SB7JtmfA","85a18801a703fc537e68cda6f6b4b614"]]],
-        ["Дерсу Узала",1975,[["bp2ihvch45k","76ae7e626a85cf672f901c0f75ea929f"],["HVobfdjETew",""]]],
-        ["Джентльмены удачи",1971,[["8tJPKSz6Gaw","8f50ed5a7841ff1418671a3c6b7440d4"]]],
-        ["Дни и ночи",1944,[["d8LsF0-MRaI",""]]],
-        ["Добряки",1979,[["OgEvZh3cMsg","c075e93fa35900ab99b0e07877d4f47e"]]],
-        ["Дорога к морю",1965,[["eVeATgpIaxQ",""]]],
-        ["Дорога на Берлин",2015,[["DjHTWMP_T1U",""]]],
-        ["Друг мой, Колька!..",1961,[["5wEvu3Y3eIo",""]]],
-        ["Еще раз про любовь",1968,[["voGfZ7T8jQg","0648fd5f7438d672b72c5d50c0b8cf2b"]]],
-        ["Жаркое лето в Кабуле",1983,[["dhMC1uA3w90",""]]],
-        ["Жди меня",1943,[["GjgpRXLztmo",""]]],
-        ["Женитьба Бальзаминова",1964,[["PYdfEMNkVwI",""]]],
-        ["Жених с того света",1958,[["gKoaB1Hy-X8",""]]],
-        ["Жестокий романс",1984,[["4naOrjRiTnc",""],["-6DNbCOaAH8",""]]],
-        ["Живите в радости",1978,[["hPSwuMKG2Yk",""]]],
-        ["Живые и мертвые",1963,[["ZpXhR5Iw6vM",""],["sE5MDJ9RCUk",""]]],
-        ["За спичками",1980,[["12-mEzG8TUo",""]]],
-        ["Звезда",2002,[["vcGC2JDh-pc",""]]],
-        ["Звонят, откройте дверь",1965,[["A_qBi8GjeOY",""]]],
-        ["Земля Санникова",1973,[["Lthcn5C4Mpg","517a03c96cb712b66c3490e8c5460271"]]],
-        ["Зимний вечер в Гаграх",1985,[["vd1hzYAQHW8","2adc63a4d04293c2b4f73a2147d6bef0"]]],
-        ["Змеелов",1985,[["MabRmJ2qrjM",""]]],
-        ["Золотой теленок",1968,[["jchmRazCbJM",""],["pyqD23zX0YI",""]]],
-        ["Иван Васильевич меняет профессию",1973,[["TQ8onQu5QKY","de108b940b59e5e9d361077328ca9201"]]],
-        ["Иди и смотри",1985,[["UkkJZweYaLI","8a444281685a97ee8828ff27e87b0178"]]],
-        ["Илья Муромец",1956,[["uopfqauEz64",""]]],
-        ["Инкогнито из Петербурга",1977,[["UIM9wSOzJV0",""]]],
-        ["Исчезнувшая империя",2007,[["Rfrmzk2zrTA","ea0df4d7b51ab0de57c92defee411054"]]],
-        ["Ищите женщину",1982,[["fjfB08JEALY",""],["gWnefFBV_sY",""]]],
-        ["Кавказская пленница, или Новые приключения Шурика",1966,[["0f1LxDfNpv0","2959f7a99504290930cc68951bd2f5ce"]]],
-        ["Кадриль",1999,[["xTSppgrbhFE",""]]],
-        ["Калина красная",1973,[["MYmi--Kot-k","1ffb924533679b0844a66ddbb4d7ca26"]]],
-        ["Карусель",1970,[["t_rmuj4n1Gg",""]]],
-        ["Киноальманах \"Совершенно серьезно\"",1961,[["SUe5icgNSFk",""]]],
-        ["Киноальманах \"Совершенно серьезно\". Пес Барбос и необычный кросс",1961,[["iBNwsNmKGxA",""]]],
-        ["Китайский сервиз",1999,[["7dhXHN-Jsws",""]]],
-        ["Ко мне, Мухтар!",1964,[["5FJvRsh2pv4",""]]],
-        ["Комедия давно минувших дней",1980,[["ehYajR5Qleg",""]]],
-        ["Коммунист",1957,[["es8MdRnBdJQ","bbb873aa7fd627b349991322ef68883c"]]],
-        ["Композитор Глинка",1952,[["FYF5ovlUNm4","111b1e2676735c36183e6520180a6aaf"]]],
-        ["Косухи",2013,[["XH75vK6X4ik",""]]],
-        ["Красное, синее, зеленое",1966,[["y2V7dC-pz7o",""]]],
-        ["Крах",1968,[["UJwxRuIvf_s",""],["eZoMr8CFYyo",""]]],
-        ["Курьер",1986,[["QSc3uk8Q5w4","788d258dd76e66c7f1e8bf972125e2bf"]]],
-        ["Кыш и Двапортфеля",1974,[["7yU6u_tYdYg",""]]],
-        ["Леди Макбет Мценского уезда",1989,[["5-lqqfCZydU",""]]],
-        ["Лермонтов",1986,[["KicwbmKIq4I",""]]],
-        ["Лестница",1989,[["cr-WmROmts8","d3c721770f281c561e261bb3d2353ca6"]]],
-        ["Летят журавли",1957,[["2OccZQmxKac","7d448de4550e9c88c684be319fa43b7d"]]],
-        ["Любимая женщина механика Гаврилова",1981,[["_HII9IO5M4g",""]]],
-        ["Любовь в СССР",2012,[["ZYzLxPHv4d8","84936a4a7e583599f9499267745cd3d3"]]],
-        ["Любовь земная",1974,[["Q4QZ11iuq1c",""]]],
-        ["Любовь и голуби",1984,[["qYPVTBIgF7Q","68781d890618ea50933ec020fd5060bf"]]],
-        ["Майор Вихрь",1967,[["dmVmabto42I",""],["WWs0qSuvWKQ",""],["9ysGdh37iGM",""]]],
-        ["Маленькие трагедии",1979,[["1Ke33_1de_Y",""],["sJcrStM2U3c",""],["O9ncpNMzhSs",""]]],
-        ["Мальчики",1971,[["HkrP2H_t6QE",""]]],
-        ["Мачеха",1973,[["M2v970u8TCI",""]]],
-        ["Места тут тихие",1967,[["yjhbrGCexgQ",""]]],
-        ["Мимино",1977,[["P4k2LNPRV-0",""]]],
-        ["Мичман Панин",1960,[["qUC4Ea_gqEo","899c87b257098f505351f83aef9f6b5d"]]],
-        ["Мой ласковый и нежный зверь",1978,[["IQhBo9Pz0rw","e04d180bb2a8f0a5e6ad7ac4d1e2a54b"]]],
-        ["Москва слезам не верит",1979,[["X7GuhjGZ-xs","c3f9a356e9e04ac607b4d7d295648eab"],["uUVd9j543s8","993a315cc6dbb860b88d1b1171e85d3b"]]],
-        ["Москва, любовь моя",1974,[["SMkjDijxwq4",""]]],
-        ["Мы из джаза",1983,[["sP_myq8HZ9c","58571267d048c4490ee0bffaa9844c44"]]],
-        ["Не может быть!",1975,[["DZHXRy-FTuM",""]]],
-        ["Не хочу быть взрослым!",1982,[["vGJPWk7H-b0",""]]],
-        ["Невероятные приключения итальянцев в России",1973,[["0B3nK-k0KzQ",""]]],
-        ["Неисправимый лгун",1973,[["IsbjcE8w0ps",""]]],
-        ["Нейлон - 100%",1973,[["9GoZ-EO1hvQ",""]]],
-        ["Неподсуден",1969,[["uMWb57a56c8",""]]],
-        ["О друзьях-товарищах",1970,[["xwAQ_v4c0gU",""],["EnjupKnw8ZM",""]]],
-        ["Одиноким предоставляется общежитие",1983,[["faQWW7RNchI",""]]],
-        ["Одиночное плавание",1985,[["3hwqjvQ18vg","1fc2614cc6668453192d0141207e7c03"]]],
-        ["Она",2013,[["k0vAWHGoXZA",""]]],
-        ["Они сражались за Родину",1975,[["xfUlR_nuBb4",""]]],
-        ["Опасно для жизни",1985,[["Glle7qNMxCE",""]]],
-        ["Опекун",1970,[["KxJeEctWvxc",""]]],
-        ["Операция \"Ы\" и другие приключения Шурика",1965,[["7ICl3sPny94","fcb693c38528938caa3b70101b7c58bf"]]],
-        ["Освобождение. Фильм 1. Огненная дуга",1968,[["GZlzMhfx2hQ",""]]],
-        ["Освобождение. Фильм 2-й. Прорыв",1968,[["j0t5CHhsuaM",""]]],
-        ["Освобождение. Фильм 3-й. Направление главного удара",1970,[["Glz5ZJLEPgY",""]]],
-        ["Освобождение. Фильм 4-й. Битва за Берлин",1971,[["MEfxAE6dTDU",""]]],
-        ["Освобождение. Фильм 5-й. Последний штурм",1971,[["PqJEMXbRgdw",""]]],
-        ["Осенние свадьбы",1967,[["Re4ovfuiQpU",""]]],
-        ["Ответный ход",1981,[["HsGsMVVhb5A",""]]],
-        ["Падение Берлина",1949,[["t-hZam8dXHU",""],["1AHUQ1QRVn4",""]]],
-        ["Палата №6",2009,[["7lDz_9RW5zA","48be756b83375cacdb5a9b6bb81b0e89"]]],
-        ["Пена",1979,[["TER9_JMLMv4",""]]],
-        ["Первое свидание",1960,[["qENexAdKtm4",""]]],
-        ["По главной улице с оркестром",1986,[["_OKnE5fSG-c","9a21fe793f3a6b8f7da7316dcd60eb75"]]],
-        ["По семейным обстоятельствам",1977,[["CLiVVm7uaeA",""],["b3lQ6xZE93k",""]]],
-        ["Помни имя своё",1974,[["R4B-qMqV7cA",""]]],
-        ["Последняя жертва",1975,[["H5PdjPF4l6A",""]]],
-        ["Прежде, чем расстаться",1984,[["W_M29YNoUWs",""]]],
-        ["Пришел солдат с фронта",1971,[["1OxY3kYVd6A",""]]],
-        ["Путь к причалу",1962,[["HhIco19wK4g",""]]],
-        ["Пядь земли",1964,[["2Abp6AQhF4E",""]]],
-        ["Пять дней, пять ночей",1960,[["cxfCGhUxMIE",""]]],
-        ["Раз на раз не приходится",1987,[["StAibxiC6Uk",""]]],
-        ["Ребро Адама",1990,[["nNVwosCwjlY",""]]],
-        ["Решение о ликвидации",2018,[["-dLBhMfVi3E",""]]],
-        ["Самая обаятельная и привлекательная",1985,[["v7PbeasXUbM","99fbb912b94d7d533d53556db73aa627"]]],
-        ["Сашка",1981,[["W1k4Rm90p5o",""]]],
-        ["Сверстницы",1959,[["jqbaCD-Gv88",""]]],
-        ["Сдается дом со всеми неудобствами",2016,[["uy2E5CRXlnA",""]]],
-        ["Седьмое небо",1971,[["HDwTiUluWbs",""]]],
-        ["Секретная миссия",1950,[["O6tcm9ejFgE",""]]],
-        ["Сказ про то, как царь Петр арапа женил",1976,[["aePYhB1VHfY",""]]],
-        ["Сказка о потерянном времени",1964,[["rmyF-XTrHeU",""]]],
-        ["Сказка странствий",1982,[["7LNrQ4bt-Qc",""]]],
-        ["Служебный роман",1977,[["hR-1QGMK75c","9b8a20607f7a35bde58aaf51fd9d8348"],["kUNy3NrxZAc","45fd0c7752add6e3cad61521a8869dac"]]],
-        ["Служили два товарища",1968,[["e7P3QbcI91U",""]]],
-        ["Смешные люди",1977,[["nKzTV2YPHkI",""]]],
-        ["Сны",1993,[["1mZZZ4dBlRo","2d2b72bf4071179b2aaca148c45ce4be"]]],
-        ["Соло для слона с оркестром",1975,[["mZL3eexUziI",""],["Fl5yN6EpJpc",""]]],
-        ["Спортлото-82",1982,[["FxWczA4ZgI4","4b6f02f2b06a16261b388e17df5ac02e"]]],
-        ["Сталинград",1989,[["7MU_HhTLXcE","551ea69818b79dcdf1a46dc379335b98"],["FSslPhaPVzQ","d641fb0ef5223340b6c1de22c9eb8012"]]],
-        ["Сталкер",1979,[["UPerb922QGM","51c61871c3db1ef2624b2e4cd0aae155"]]],
-        ["Старшая сестра",1966,[["VoQEUYAJwbc",""]]],
-        ["Странная женщина",1977,[["MzIPA7gAzvM","69c10c5669858266bfdc0bd9c938666a"]]],
-        ["Судьба",1977,[["S8WCv3qz4DM",""]]],
-        ["Судьба человека",1959,[["ov7bKyahGL4",""]]],
-        ["Суета сует",1979,[["qZ-UglMUxN8","60b3de16497f812364819363fac5ed2b"]]],
-        ["Табор уходит в небо",1976,[["udkz19ISbZs","5ee9ac8df7002536fe888df3503f686b"]]],
-        ["Тема",1979,[["4A1TBPJnFFo","4ab73adb665f60bb0c33841b308db443"]]],
-        ["Точка, точка, запятая",1972,[["9or1F07gh6Q",""]]],
-        ["Трактир на Пятницкой",1977,[["P1XM8A-YdRU",""]]],
-        ["Третий тайм",1962,[["X1awfyw9vIU",""]]],
-        ["Трижды воскресший",1960,[["snXuJa5y768",""]]],
-        ["Ты - мне, я - тебе",1976,[["GpRwjWEvizQ",""]]],
-        ["У самого Белого моря",2021,[["HDuCqwlDaAo",""]]],
-        ["Убийство на улице Данте",1956,[["OHug8mK1zlo",""]]],
-        ["Укрощение огня",1972,[["k4h_ebC8KyY","5f546d43a8f15ef49a5aec53098c8a7a"]]],
-        ["Фронт без флангов",1974,[["i3iibu2c_Yg",""],["mVeRQc8KPPo",""]]],
-        ["Хитровка. Знак четырёх",2023,[["bf5P3wQZ3fc","e4815c220252ceac0ea9c0460b8cf5bc"]]],
-        ["Хозяин тайги",1968,[["lQdfSGj6PQY",""]]],
-        ["Цареубийца",1991,[["k5RncpCn4Xc","c990498a7a02b5e4d27ea3011446ddc2"]]],
-        ["Цветы от победителей",1999,[["V23ErtWVtyo",""]]],
-        ["Частный детектив, или операция \"Кооперация\"",1989,[["UWpyJM-0qlI",""]]],
-        ["Человек родился",1956,[["YtlmWtXqcWs",""]]],
-        ["Человек-невидимка",1984,[["K3CSWhXOB6k",""]]],
-        ["Шаг",1988,[["KHlBy1DJBfA",""]]],
-        ["Шантажист",1987,[["u4BgUGhSjnM",""]]],
-        ["Шире шаг, маэстро!",1975,[["R01VilweboM","4f193a0d4ebd62266afdfb1a47428d60"]]],
-        ["Ширли-Мырли",1995,[["_v3Kl79PMuE",""]]],
-        ["Щит и меч",1967,[["4f-9REDLyZE",""],["B-sM6yS9s6A",""],["x6Ct6EnGk40",""],["844cLSXa20c",""]]],
-        ["Экипаж",1979,[["lgSl7D_vtEE",""]]],
-        ["Эта веселая планета",1973,[["xeQYVvKr5Mo",""]]],
-        ["Яды, или Всемирная история отравлений",2001,[["mLVwmY527TU","dfc38c56d05a6efedf8be2701c378738"]]],
-        ["The Assassin of the Tsar (английская версия фильма \"Цареубийца\")",1991,[["_Iz5ST2BYy8",""]]]
-    ];
-    /* studio-index:end */
+    var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
 
-    function studioSource(movie) {
-        var year = Number(String(movie.release_date || movie.first_air_date || '').slice(0, 4));
-        var titles = [movie.title, movie.original_title, movie.name, movie.original_name].map(normalizeTitle);
-        var match = studioIndex.filter(function (entry) {
-            return entry[1] === year && titles.indexOf(normalizeTitle(entry[0])) >= 0;
-        })[0];
-        if (!match) return null;
-        var rows = [];
-        match[2].forEach(function (part, index) {
-            var title = match[0] + (match[2].length > 1 ? ' · Часть ' + (index + 1) : '');
-            var fallback = youtubeStream(part[0]).url;
-            rows.push({ title: title, subtitle: 'YouTube · Качество выбирает плеер',
-                action: function () { play(title, fallback); } });
-            if (part[1]) rows.push({ title: title, subtitle: 'RuTube · HLS', action: function () {
-                var activity = lampa.Activity.active();
-                readJson('https://rutube.ru/api/play/options/' + part[1] + '/?format=json', function (options) {
-                    if (lampa.Activity.active() !== activity) return;
-                    var stream = options && options.video_balancer && options.video_balancer.m3u8;
-                    play(title, typeof stream === 'string' && /^https:\/\/[\w.-]+\//.test(stream) ? stream : fallback);
-                });
-            } });
+    function vixIndex(done) {
+        if (vixCatalog && Date.now() - vixLoadedAt < 3600000) { done(vixCatalog); return; }
+        vixWaiting.push(done);
+        if (vixWaiting.length > 1) return;
+        readResponse('https://open4k-tv.github.io/vix-catalog.json', 10000, function (response) {
+            return JSON.parse(response.responseText);
+        }, function (data) {
+            if (data && Array.isArray(data.movie) && Array.isArray(data.tv)) {
+                vixCatalog = data;
+                vixLoadedAt = Date.now();
+            }
+            var waiting = vixWaiting;
+            vixWaiting = [];
+            waiting.forEach(function (callback) { callback(vixCatalog); });
         });
-        return { title: 'Мосфильм', rows: rows };
+    }
+
+    function openVix(title, path) {
+        var frame = document.createElement('iframe');
+        frame.title = title;
+        frame.style.cssText = 'display:block;width:100%;height:70vh;border:0;background:black';
+        frame.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+        frame.setAttribute('allowfullscreen', '');
+        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+        frame.src = 'https://vixsrc.to/' + path + '?autoplay=true&lang=ru';
+        function close() {
+            frame.src = 'about:blank';
+            lampa.Modal.close();
+            lampa.Controller.toggle('content');
+        }
+        lampa.Modal.open({title:title, html:window.$(frame), size:'large', buttons_position:'outside',
+            buttons:[{name:'Закрыть', onSelect:close}], onBack:close});
+    }
+
+    function vixSource(movie, done) {
+        var series = isSeries(movie);
+        var imdb = movie.imdb_id || (movie.external_ids || {}).imdb_id || '';
+        var imdbNumber = /^tt\d+$/.test(imdb) ? Number(imdb.slice(2)) : 0;
+        var tmdb = Number(movie.tmdb_id || ((!movie.source || movie.source === 'tmdb') && movie.id));
+        vixIndex(function (catalog) {
+            var list = catalog && catalog[series ? 'tv' : 'movie'];
+            if (!list) { done(null); return; }
+            var match;
+            for (var i = 0; i < list.length; i++) {
+                if ((imdbNumber && list[i][1] === imdbNumber) || (tmdb && list[i][0] === tmdb && !imdbNumber)) {
+                    match = list[i]; break;
+                }
+            }
+            if (!match) { done(null); return; }
+            var title = cardTitle(movie);
+            if (!series) {
+                done({title:'VixSrc', rows:[{title:title, subtitle:'Открыть плеер VixSrc',
+                    action:function () { openVix(title,'movie/' + match[0]); }}]});
+                return;
+            }
+            function seasonRow(season, episodes) {
+                var label = 'Сезон ' + season;
+                return {title:label, subtitle:'Выбрать серию', action:function () {
+                    lampa.Select.show({title:label, items:episodes, onSelect:function (item) {
+                        lampa.Controller.toggle('content');
+                        openVix(title + ' · ' + label + ' · ' + item.title,
+                            'tv/' + match[0] + '/' + season + '/' + item.number);
+                    }, onBack:function () { lampa.Controller.toggle('content'); }});
+                }};
+            }
+            var rows = [];
+            (movie.seasons || []).forEach(function (s) {
+                var episodes = [];
+                if (!(s.season_number > 0 && s.episode_count > 0 && s.episode_count <= 5000)) return;
+                for (var n = 1; n <= s.episode_count; n++) episodes.push({title:'Серия ' + n,number:n});
+                rows.push(seasonRow(s.season_number,episodes));
+            });
+            if (rows.length) { done({title:'VixSrc',rows:rows}); return; }
+            if (!match[1]) { done(null); return; }
+            var external = String(match[1]);
+            while (external.length < 7) external = '0' + external;
+            readJson('https://api.tvmaze.com/lookup/shows?imdb=tt' + external, function (show) {
+                if (!show || !Number(show.id)) { done(null); return; }
+                readJson('https://api.tvmaze.com/shows/' + show.id + '/episodes', function (episodes) {
+                    var seasons = {};
+                    (Array.isArray(episodes) ? episodes : []).forEach(function (ep) {
+                        if (!(Number(ep.season) > 0 && Number(ep.number) > 0)) return;
+                        if (!seasons[ep.season]) seasons[ep.season] = [];
+                        seasons[ep.season].push({title:'Серия ' + ep.number, number:ep.number});
+                    });
+                    Object.keys(seasons).forEach(function (s) { rows.push(seasonRow(s,seasons[s])); });
+                    done(rows.length ? {title:'VixSrc',rows:rows} : null);
+                });
+            });
+        });
     }
 
     function broadcasterSource(movie, done) {
@@ -445,15 +309,6 @@
                 },
                 youtubeStream(youtubeId)
             ]
-        };
-    }
-
-    function studioFilm(title, year, id) {
-        return {
-            title: title,
-            year: year,
-            credit: 'Мосфильм · YouTube',
-            streams: [youtubeStream(id)]
         };
     }
 
@@ -611,20 +466,7 @@
 
         var items = [{ title: 'Открытые короткометражки', separator: true }].concat(films.map(filmRow));
         items.push({ title: 'Полнометражное кино', separator: true });
-        items = items.concat(classics.concat(mosfilm).map(filmRow));
-        items.push({ title: 'Каталог Мосфильма', subtitle: studioIndex.length + ' картин и сериалов',
-            action: function () {
-                function browse() {
-                    var titles = studioIndex.map(function (entry) {
-                        return { title: entry[0] + ' (' + entry[1] + ')', action: function () {
-                            var found = studioSource({title: entry[0], release_date: String(entry[1])});
-                            if (found) showPicker(entry[0], found.rows, controller, browse);
-                        } };
-                    });
-                    showPicker('Мосфильм', titles, controller, function () { showCatalog(controller); });
-                }
-                browse();
-            } });
+        items = items.concat(classics.map(filmRow));
         if (lampa.Input && typeof lampa.Input.edit === 'function') {
             items.push({
                 title: 'Открыть свой поток',
@@ -642,7 +484,7 @@
         var titles = [movie.title, movie.original_title].map(function (title) {
             return typeof title === 'string' ? title.trim().toLowerCase() : '';
         });
-        return films.concat(classics, mosfilm).filter(function (candidate) {
+        return films.concat(classics).filter(function (candidate) {
             return candidate.year === year && (titles.indexOf(candidate.title.toLowerCase()) !== -1 ||
                 (candidate.original && titles.indexOf(candidate.original.toLowerCase()) !== -1));
         })[0];
@@ -1109,7 +951,7 @@
         api.addParam({
             component: 'open4k',
             param: { name: 'open4k_default_source', type: 'select', default: 'auto', values: {
-                auto: 'Автоматически', studio: 'Мосфильм', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
+                auto: 'Автоматически', vix: 'VixSrc', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
                 archive: 'Internet Archive', catalog: 'Подборка 4K'
             } },
             field: { name: 'Источник по умолчанию', description: 'Открывается при входе в карточку просмотра.' }
@@ -1118,17 +960,18 @@
 
     function MovieScreen(options) {
         var self = this, $ = window.$, movie = options.movie || {};
-        var names = { studio: 'Мосфильм', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
+        var names = { vix: 'VixSrc', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
         var title = cardTitle(movie), original = movie.original_title || movie.original_name || '';
         var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
         var film = findFilm(movie);
         var query = title, serial = 0, alive = true, last, loaded = {};
         var pref = lampa.Storage.get('open4k_default_source', 'auto');
         var order = film ? ['catalog','collaps'] : isAnimation(movie) ? ['anime','collaps'] : ['collaps'];
-        if (studioSource(movie)) order.unshift('studio');
+        order.unshift('vix');
         order.push('broadcast');
         if (!isSeries(movie) && year) order.push('archive');
-        var source = names[pref] ? pref : order[0];
+        if (!Object.prototype.hasOwnProperty.call(names, pref)) pref = 'auto';
+        var source = pref === 'auto' ? order[0] : pref;
         var root = $('<div class="o4-view"></div>');
         var side = $('<aside class="o4-info"></aside>').appendTo(root);
         var main = $('<section class="o4-main"></section>').appendTo(root);
@@ -1171,7 +1014,7 @@
             function apply(value) {
                 value = String(value || '').trim();
                 if (!value) return;
-                if (source === 'collaps' && value !== title && lampa.Search) {
+                if ((source === 'collaps' || source === 'vix') && value !== title && lampa.Search) {
                     lampa.Search.open({input:value}); return;
                 }
                 query = value; loaded = {}; load(false);
@@ -1242,7 +1085,7 @@
                 done(match && {title:names[key],rows:match.streams.map(function (stream) {
                     return {title:stream.title,subtitle:stream.subtitle,action:function () { playCatalogStream(match,stream); }};
                 })});
-            } else if (key === 'studio') done(studioSource(search));
+            } else if (key === 'vix') vixSource(movie, done);
             else if (key === 'broadcast') broadcasterSource(search,done);
             else if (key === 'archive') {
                 if (isSeries(movie) || !year) done(null); else archiveSource(search,Number(year),done);
