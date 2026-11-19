@@ -83,7 +83,7 @@
             finish();
         }
     }
-}('82ad10917825d1c93372b01b4587b1a8eceddf1eb1748519184c40e5c83214a5'));
+}('9894a26ece0882d26d3a23d4c3c74f4b98cf1be7dde3c12f4646c095207b5cb5'));
 (function () {
     'use strict';
 
@@ -398,12 +398,13 @@
         lampa.Player.play(video);
     }
 
-    function choosePlayback(title, media, hls) {
+    function choosePlayback(title, media, hls, voiceIndex, onPlay) {
         var dash = media.dasha || media.dash;
         var validDash = typeof dash === 'string' &&
             /^https:\/\/(?:[a-z0-9-]+\.)*interkh\.com\/[a-z0-9_./%-]+\.mpd(?:\?[^\s<>"'#\\]*)?$/i.test(dash);
         var names = media.audio && media.audio.names;
         function launch(url) {
+            if (onPlay) onPlay();
             if (!Array.isArray(names) || !names.length || !lampa.PlayerVideo || !lampa.Player.listener) {
                 collapsPlayback(title, media, url);
                 return;
@@ -426,7 +427,8 @@
                     collapsPlayback(title, media, url);
                 } };
             });
-            showPicker('Озвучка · ' + title, voices, 'content');
+            if (voices[voiceIndex]) voices[voiceIndex].action();
+            else showPicker('Озвучка · ' + title, voices, 'content');
         }
         if (!validDash) { launch(hls); return; }
         readResponse(dash, 4000, function (req) {
@@ -548,6 +550,7 @@
         function ready(result) {
             done({
                 title: 'Collaps',
+                media: result,
                 subtitle: result.resolution || 'Онлайн-видео',
                 action: function (back, otherSources) {
                     var title = cardTitle(movie) + ' · Collaps';
@@ -631,6 +634,7 @@
             }
             done(rows.length ? {
                 title: 'AniLiberty',
+                rows: rows,
                 subtitle: 'Русская озвучка · серий: ' + rows.length,
                 action: function (back) { showPicker(cardTitle(movie), rows, 'content', back); }
             } : null);
@@ -741,6 +745,7 @@
                     });
                     done(rows.length ? {
                         title: 'Internet Archive',
+                        rows: rows,
                         subtitle: 'Полный фильм · ' + rows[0].title,
                         action: function (back) { showPicker(cardTitle(movie), rows, 'content', back); }
                     } : null);
@@ -786,7 +791,180 @@
         });
     }
 
+    function registerSettings() {
+        var api = lampa.SettingsApi;
+        if (!api || api.getComponent('open4k')) return;
+        api.addComponent({ component: 'open4k', name: menuTitle, icon: icon });
+        api.addParam({
+            component: 'open4k',
+            param: { name: 'open4k_default_source', type: 'select', default: 'auto', values: {
+                auto: 'Автоматически', collaps: 'Collaps', anime: 'AniLiberty',
+                archive: 'Internet Archive', catalog: 'Подборка 4K'
+            } },
+            field: { name: 'Источник по умолчанию', description: 'Открывается при входе в карточку просмотра.' }
+        });
+    }
+
+    function MovieScreen(options) {
+        var self = this, $ = window.$, movie = options.movie || {};
+        var names = { collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
+        var title = cardTitle(movie), original = movie.original_title || movie.original_name || '';
+        var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
+        var film = findFilm(movie);
+        var query = title, serial = 0, alive = true, last, loaded = {};
+        var pref = lampa.Storage.get('open4k_default_source', 'auto');
+        var order = film ? ['catalog','collaps'] : isAnimation(movie) ? ['anime','collaps'] : ['collaps'];
+        if (!isSeries(movie) && year) order.push('archive');
+        var source = names[pref] ? pref : order[0];
+        var root = $('<div class="o4-view"></div>');
+        var side = $('<aside class="o4-info"></aside>').appendTo(root);
+        var main = $('<section class="o4-main"></section>').appendTo(root);
+        var tools = $('<div class="o4-tools"></div>').appendTo(main);
+        var list = $('<div class="o4-list"></div>').appendTo(main);
+        var historyKey = 'open4k_recent_' + (isSeries(movie) ? 'tv' : 'film') + '_' + (movie.id || title + year);
+
+        function picture(path, size) {
+            if (!path || !lampa.Api || !lampa.Api.img) return '';
+            return lampa.Api.img(path, size);
+        }
+        function tag(parent, cls, value) {
+            return $('<div></div>').addClass(cls).text(value).appendTo(parent);
+        }
+        function control(parent, cls, label, action) {
+            return tag(parent, 'selector ' + cls, label).on('hover:enter', action)
+                .on('hover:focus', function () { last = this; this.scrollIntoView({block:'nearest'}); });
+        }
+        function focus() {
+            if (!alive || lampa.Activity.active().activity !== self.activity) return;
+            lampa.Controller.collectionSet(root);
+            lampa.Controller.collectionFocus(last && $.contains(root[0],last) ? last : sourceButton[0], root);
+        }
+        function drawer(label, choices, pick) {
+            lampa.Select.show({title:label, items:choices, onSelect:function (row) {
+                lampa.Controller.toggle('content'); pick(row);
+            }, onBack:function () { lampa.Controller.toggle('content'); }});
+        }
+        var sourceButton = control(tools, 'o4-chip', '', function () {
+            drawer('Источник', Object.keys(names).map(function (key) {
+                return { title:names[key], key:key, selected:key === source };
+            }), function (row) { source = row.key; load(false); });
+        });
+        var queryButton = control(tools, 'o4-chip', '', function () {
+            var choices = [{ title:'Указать название', edit:true }];
+            if (lampa.Search) choices.push({ title:'Глобальный поиск', global:true });
+            [title,original].forEach(function (value) {
+                if (value && !choices.some(function (row) { return row.value === value; })) choices.push({title:value,value:value,selected:value === query});
+            });
+            function apply(value) {
+                value = String(value || '').trim();
+                if (!value) return;
+                if (source === 'collaps' && value !== title && lampa.Search) {
+                    lampa.Search.open({input:value}); return;
+                }
+                query = value; loaded = {}; load(false);
+            }
+            drawer('Уточнить поиск', choices, function (row) {
+                if (row.global) lampa.Search.open({input:query});
+                else if (row.edit) lampa.Input.edit({title:'Название',value:query,free:true}, apply);
+                else apply(row.value);
+            });
+        });
+        var poster = picture(movie.poster_path,'w342');
+        var still = picture(movie.backdrop_path,'w500') || poster;
+        if (poster) $('<img class="o4-poster" alt="">').attr('src',poster).appendTo(side);
+        tag(side,'o4-meta',[year,(movie.production_countries || []).map(function (c) { return c.name; }).join(', '),
+            Number(movie.vote_average) > 0 ? '★ ' + Number(movie.vote_average).toFixed(1) : ''].filter(Boolean).join(' · '));
+        tag(side,'o4-name',title);
+        tag(side,'o4-genres',(movie.genres || []).map(function (g) { return g.name; }).filter(Boolean).join(' · '));
+        tag(side,'o4-summary',movie.overview || '');
+        function remember(label) { lampa.Storage.set(historyKey, label); }
+        function draw(rows) {
+            list.empty();
+            var recent = lampa.Storage.get(historyKey,'');
+            tag(list,'o4-history',recent ? 'Последний выбор · ' + recent : 'Нет истории просмотра');
+            rows.forEach(function (row) {
+                var item = control(list,'o4-row','',function () { row.action(); });
+                if (still) $('<img alt="">').attr('src',still).appendTo(item);
+                var copy = $('<div class="o4-copy"></div>').appendTo(item);
+                tag(copy,'o4-label',row.title);
+                tag(copy,'o4-detail',[row.subtitle, movie.runtime ? movie.runtime + ' мин' : ''].filter(Boolean).join(' · '));
+            });
+            if (!rows.length) tag(list,'o4-empty','У источника нет видео для этой карточки. Выберите другой источник.');
+            focus();
+        }
+        function rowsFor(found) {
+            if (!found) return [];
+            if (!found.media) return found.rows.map(function (row) {
+                return {title:row.title,subtitle:row.subtitle,action:function () { remember(found.title + ' · ' + row.title); row.action(); }};
+            });
+            var media = found.media;
+            if (!media.url) return collapsRows(movie, media, function () { draw(rowsFor(found)); });
+            var voices = media.audio && media.audio.names || [];
+            return (voices.length ? voices : ['Воспроизвести']).map(function (name,index) {
+                return {title:String(name),subtitle:media.dash ? 'DASH / HLS · выбрать качество' : media.resolution || 'HLS',
+                    action:function () { choosePlayback(title,media,media.url,index,function () { remember('Collaps · ' + name); }); }};
+            });
+        }
+        function load(auto) {
+            var id = ++serial, key = source;
+            sourceButton.text('Источник · ' + names[key]);
+            queryButton.text('Поиск · ' + query);
+            list.empty(); tag(list,'o4-empty','Поиск видео…');
+            function done(found) {
+                if (!alive || id !== serial) return;
+                loaded[key] = found || null;
+                var rows = rowsFor(found);
+                if (!rows.length && auto && order.indexOf(key) < order.length - 1) {
+                    source = order[order.indexOf(key) + 1]; load(true);
+                } else draw(rows);
+            }
+            if (Object.prototype.hasOwnProperty.call(loaded,key)) { done(loaded[key]); return; }
+            var search = $.extend({},movie);
+            if (query !== title) {
+                search.title = search.name = query;
+                search.original_title = search.original_name = query;
+            }
+            if (key === 'catalog') {
+                var match = findFilm(search);
+                done(match && {title:names[key],rows:match.streams.map(function (stream) {
+                    return {title:stream.title,subtitle:stream.subtitle,action:function () { play(match.title,stream.url); }};
+                })});
+            } else if (key === 'archive') {
+                if (isSeries(movie) || !year) done(null); else archiveSource(search,Number(year),done);
+            } else if (key === 'anime') aniLibertySource(search,done);
+            else {
+                var ids = collapsIds(movie);
+                var tmdb = lampa.Api && lampa.Api.sources && lampa.Api.sources.tmdb;
+                if (!ids.length && movie.source === 'tmdb' && tmdb && tmdb.external_ids) {
+                    tmdb.external_ids({id:movie.id,type:isSeries(movie)?'tv':'movie'},function (external) {
+                        if (alive && id === serial) collapsSource(movie,collapsIds(external || {}),done);
+                    },function () { done(null); });
+                } else collapsSource(movie,ids,done);
+            }
+        }
+        this.create = function () {
+            if (!$('#open4k-layout').length) $('<style id="open4k-layout"></style>').text(
+                '.o4-view{display:flex;height:100%;padding:1.4em;box-sizing:border-box;gap:2em}.o4-info{width:26%;flex-shrink:0;overflow:hidden}.o4-poster{width:42%;border-radius:.5em}.o4-meta,.o4-detail,.o4-genres{opacity:.76;font-size:.88em}.o4-meta{margin:1em 0}.o4-name{font-size:1.85em;font-weight:700;line-height:1.1;margin:.5em 0}.o4-summary{margin-top:1.4em;line-height:1.45;opacity:.88}.o4-main{flex:1;min-width:0;display:flex;flex-direction:column}.o4-tools{display:flex;flex-wrap:wrap;gap:.65em;padding:.25em}.o4-chip,.o4-row{background:rgba(18,22,24,.76);border-radius:.5em;cursor:pointer}.o4-chip{padding:.8em 1em}.o4-list{overflow-y:auto;flex:1;padding:.3em}.o4-history,.o4-empty{padding:1em 0;opacity:.8}.o4-row{display:flex;align-items:center;min-height:4.7em;margin:.6em 0;overflow:hidden}.o4-row img{width:8em;height:4.7em;object-fit:cover}.o4-copy{padding:.65em 1em}.o4-label{font-size:1.24em}.o4-detail{margin-top:.35em}.o4-view .focus{outline:3px solid currentColor;outline-offset:-3px}'
+            ).appendTo('head');
+            this.activity.loader(false); this.activity.toggle(); load(pref === 'auto');
+            return root;
+        };
+        this.start = function () {
+            var controller = { toggle:focus,back:function () { lampa.Activity.backward(); } };
+            ['up','down','left','right'].forEach(function (dir) { controller[dir] = function () { window.Navigator.move(dir); }; });
+            lampa.Controller.add('content',controller); lampa.Controller.toggle('content');
+        };
+        this.render = function () { return root; };
+        this.pause = this.stop = function () {};
+        this.destroy = function () { alive = false; root.remove(); };
+    }
+
     function openCard(movie) {
+        if (lampa.Component && lampa.Activity && window.$) {
+            lampa.Component.add('open4k_movie', MovieScreen);
+            lampa.Activity.push({ component: 'open4k_movie', title: menuTitle, movie: movie });
+            return;
+        }
         var request = ++cardRequest;
         var film = findFilm(movie);
         if (film) {
@@ -870,6 +1048,7 @@
     }
 
     function init() {
+        registerSettings();
         var open = function () {
             (pagesHost ? pagesHost.runtime.showCatalog : showCatalog)(lampa.Controller.enabled().name || 'content');
         };
@@ -892,7 +1071,7 @@
         addCardButton: addCardButton,
         openCard: openCard
     })) return;
-    if (window.open4kPluginLoaded) return;
+    if (window.open4kPluginLoaded) { if (window.appready) registerSettings(); return; }
     window.open4kPluginLoaded = true;
 
     if (window.appready) init();
