@@ -9,9 +9,18 @@
     var pendingRuntime = null;
     var checking = false;
     var started = false;
+    var afterRefresh = null;
 
     var host = window.open4kPages = {
         runtime: null,
+        openCard: function (movie) {
+            var activity = window.Lampa.Activity;
+            var previous = activity && activity.active();
+            afterRefresh = function () {
+                if (!activity || activity.active() === previous) host.runtime.openCard(movie);
+            };
+            if (!pendingRuntime) refresh();
+        },
         publish: function (script, runtime) {
             if (!host.runtime && script === installation) {
                 host.runtime = runtime;
@@ -41,6 +50,13 @@
         return match ? match[1] : '';
     }
 
+    function openWhenReady() {
+        if (checking || pendingRuntime || !afterRefresh) return;
+        var callback = afterRefresh;
+        afterRefresh = null;
+        callback();
+    }
+
     function loadRuntime(nextVersion) {
         if (nextVersion === version || pendingRuntime || typeof nextVersion !== 'string' ||
             !/^[a-f0-9]{64}$/.test(nextVersion)) return;
@@ -53,6 +69,7 @@
             window.clearTimeout(timeout);
             if (script.parentNode) script.parentNode.removeChild(script);
             pendingRuntime = null;
+            openWhenReady();
         }
 
         var timeout = window.setTimeout(cleanup, 8000);
@@ -65,17 +82,17 @@
         if (checking) return;
         checking = true;
 
-        function finish() { checking = false; }
+        function finish() { checking = false; openWhenReady(); }
 
         try {
             var request = new XMLHttpRequest();
             request.open('GET', baseUrl + 'release.json?check=' + Date.now(), true);
             request.timeout = 5000;
             request.onload = function () {
-                finish();
                 var release;
                 try { if (request.status === 200) release = JSON.parse(request.responseText); } catch (error) {}
                 if (release && typeof release === 'object') loadRuntime(release.version);
+                finish();
             };
             request.onerror = request.ontimeout = request.onabort = finish;
             request.send();
@@ -83,7 +100,8 @@
             finish();
         }
     }
-}('9894a26ece0882d26d3a23d4c3c74f4b98cf1be7dde3c12f4646c095207b5cb5'));
+}('312444b114a720a753b77f93aee40e29d556456567220807a7478fc8679c6e6a'));
+
 (function () {
     'use strict';
 
@@ -1032,6 +1050,24 @@
         } else findOnline(ids);
     }
 
+    function upgradeOpenMovie() {
+        var activity = lampa.Activity;
+        if (!activity || !activity.all || !activity.replace || !lampa.Component) return;
+        if (lampa.Player && typeof lampa.Player.opened === 'function' && lampa.Player.opened()) return;
+        var stack = activity.all();
+        var screen = activity.active();
+        if (!screen || screen.component !== 'open4k_sources' || !/ · Collaps$/.test(screen.title) ||
+            !Array.isArray(screen.rows) || !screen.rows.some(function (row) { return row.title === 'Воспроизвести'; })) return;
+        var previous = stack[stack.length - 2];
+        if (!previous || previous.component !== 'full') return;
+        var movie = previous.movie || previous.card;
+        if (!movie || !movie.id) return;
+        movie = window.$.extend({}, movie, { source: movie.source || previous.source,
+            media_type: movie.media_type || previous.method });
+        lampa.Component.add('open4k_movie', MovieScreen);
+        activity.replace({ component: 'open4k_movie', title: menuTitle, movie: movie }, true);
+    }
+
     function addCardButton(event) {
         if (event.type !== 'complite' || !event.body || !event.data || !event.data.movie) return;
         var movie = event.data.movie;
@@ -1043,7 +1079,10 @@
 
         window.$('<div class="full-start__button selector open4k-card-button">' + icon + '<span>' +
             menuTitle + '</span></div>')
-            .on('hover:enter', function () { (pagesHost ? pagesHost.runtime.openCard : openCard)(movie); })
+            .on('hover:enter', function () {
+                if (pagesHost && pagesHost.openCard) pagesHost.openCard(movie);
+                else (pagesHost ? pagesHost.runtime.openCard : openCard)(movie);
+            })
             .appendTo(buttons);
     }
 
@@ -1071,7 +1110,10 @@
         addCardButton: addCardButton,
         openCard: openCard
     })) return;
-    if (window.open4kPluginLoaded) { if (window.appready) registerSettings(); return; }
+    if (window.open4kPluginLoaded) {
+        if (window.appready) { upgradeOpenMovie(); registerSettings(); }
+        return;
+    }
     window.open4kPluginLoaded = true;
 
     if (window.appready) init();
