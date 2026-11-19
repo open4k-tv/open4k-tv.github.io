@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('c47316ddd6782a02198d4327c8519813859aa8c64e52437d6b4122662dcdc201'));
+}('67fcc244c44609326009d783064495874ed94cfc6265d572b5d2aa62fc11bfe3'));
 
 (function () {
     'use strict';
@@ -139,13 +139,13 @@
             streams: [{ title: 'Shaka · до 3840×1636', subtitle: 'DASH · H.264', url: 'https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd' }]
         },
         commonsFilm('Tears of Steel', 2012, 'Blender Institute', '3.0', '3840×1714', 'VP8 / Vorbis',
-            '1/10/', 'Tears_of_Steel_in_4k_-_Official_Blender_Foundation_release.webm', 'OHOpb2fS-cM'),
+            '1/10/', 'Tears_of_Steel_in_4k_-_Official_Blender_Foundation_release.webm'),
         commonsFilm('Charge', 2022, 'Blender Studio', '4.0', '3840×1608', 'VP9 / Opus',
-            '7/7a/', 'Charge_-_Blender_Open_Movie-full_movie.webm', 'UXqq0ZvbOnk'),
+            '7/7a/', 'Charge_-_Blender_Open_Movie-full_movie.webm'),
         commonsFilm('Glass Half', 2015, 'Blender Foundation', '4.0', '3840×2160', 'VP9 / Opus',
-            '0/02/', 'Glass_Half_-_Blender_Open_Movie-full_movie.webm', 'lqiN98z6Dak'),
+            '0/02/', 'Glass_Half_-_Blender_Open_Movie-full_movie.webm'),
         commonsFilm('SINGULARITY', 2026, 'Blender Studio', '4.0', '3840×1608', 'AV1 / Opus',
-            'f/f2/', 'SINGULARITY_-_Blender_Open_Movie-full_movie.webm', 'l5OZu-IrXpw')
+            'f/f2/', 'SINGULARITY_-_Blender_Open_Movie-full_movie.webm')
     ];
 
     var classics = [
@@ -159,11 +159,6 @@
         return { title: title, original: original, year: year, credit: 'Internet Archive',
             streams: [{ title: resolution, subtitle: file.split('.').pop().toUpperCase(),
                 url: archive + '/download/' + id + '/' + encodeURIComponent(file) }] };
-    }
-
-    function playCatalogStream(film, stream) {
-        if (film.credit === 'Internet Archive') playArchive(film.title, stream.url);
-        else play(film.title, stream.url);
     }
 
     var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
@@ -185,78 +180,18 @@
         });
     }
 
-    function openVix(title, path) {
-        var frame = document.createElement('iframe');
-        frame.title = title;
-        frame.style.cssText = 'display:block;width:100%;height:70vh;border:0;background:black';
-        frame.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
-        frame.setAttribute('allowfullscreen', '');
-        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
-        frame.src = 'https://vixsrc.to/' + path + '?autoplay=true&lang=ru';
-        function close() {
-            frame.src = 'about:blank';
-            lampa.Modal.close();
-            lampa.Controller.toggle('content');
-        }
-        lampa.Modal.open({title:title, html:window.$(frame), size:'large', buttons_position:'outside',
-            buttons:[{name:'Закрыть', onSelect:close}], onBack:close});
-    }
-
-    function vixSource(movie, done) {
-        var series = isSeries(movie);
-        var imdb = movie.imdb_id || (movie.external_ids || {}).imdb_id || '';
-        var imdbNumber = /^tt\d+$/.test(imdb) ? Number(imdb.slice(2)) : 0;
+    function indexedIds(movie, done) {
         var tmdb = Number(movie.tmdb_id || ((!movie.source || movie.source === 'tmdb') && movie.id));
+        if (!tmdb) { done([]); return; }
         vixIndex(function (catalog) {
-            var list = catalog && catalog[series ? 'tv' : 'movie'];
-            if (!list) { done(null); return; }
-            var match;
-            for (var i = 0; i < list.length; i++) {
-                if ((imdbNumber && list[i][1] === imdbNumber) || (tmdb && list[i][0] === tmdb && !imdbNumber)) {
-                    match = list[i]; break;
-                }
+            var entries = catalog && catalog[isSeries(movie) ? 'tv' : 'movie'];
+            for (var i = 0; entries && i < entries.length; i++) {
+                if (entries[i][0] !== tmdb || !entries[i][1]) continue;
+                var digits = String(entries[i][1]);
+                while (digits.length < 7) digits = '0' + digits;
+                done(collapsIds({imdb_id:'tt' + digits})); return;
             }
-            if (!match) { done(null); return; }
-            var title = cardTitle(movie);
-            if (!series) {
-                done({title:'VixSrc', rows:[{title:title, subtitle:'Открыть плеер VixSrc',
-                    action:function () { openVix(title,'movie/' + match[0]); }}]});
-                return;
-            }
-            function seasonRow(season, episodes) {
-                var label = 'Сезон ' + season;
-                return {title:label, subtitle:'Выбрать серию', action:function () {
-                    lampa.Select.show({title:label, items:episodes, onSelect:function (item) {
-                        lampa.Controller.toggle('content');
-                        openVix(title + ' · ' + label + ' · ' + item.title,
-                            'tv/' + match[0] + '/' + season + '/' + item.number);
-                    }, onBack:function () { lampa.Controller.toggle('content'); }});
-                }};
-            }
-            var rows = [];
-            (movie.seasons || []).forEach(function (s) {
-                var episodes = [];
-                if (!(s.season_number > 0 && s.episode_count > 0 && s.episode_count <= 5000)) return;
-                for (var n = 1; n <= s.episode_count; n++) episodes.push({title:'Серия ' + n,number:n});
-                rows.push(seasonRow(s.season_number,episodes));
-            });
-            if (rows.length) { done({title:'VixSrc',rows:rows}); return; }
-            if (!match[1]) { done(null); return; }
-            var external = String(match[1]);
-            while (external.length < 7) external = '0' + external;
-            readJson('https://api.tvmaze.com/lookup/shows?imdb=tt' + external, function (show) {
-                if (!show || !Number(show.id)) { done(null); return; }
-                readJson('https://api.tvmaze.com/shows/' + show.id + '/episodes', function (episodes) {
-                    var seasons = {};
-                    (Array.isArray(episodes) ? episodes : []).forEach(function (ep) {
-                        if (!(Number(ep.season) > 0 && Number(ep.number) > 0)) return;
-                        if (!seasons[ep.season]) seasons[ep.season] = [];
-                        seasons[ep.season].push({title:'Серия ' + ep.number, number:ep.number});
-                    });
-                    Object.keys(seasons).forEach(function (s) { rows.push(seasonRow(s,seasons[s])); });
-                    done(rows.length ? {title:'VixSrc',rows:rows} : null);
-                });
-            });
+            done([]);
         });
     }
 
@@ -294,7 +229,7 @@
         search();
     }
 
-    function commonsFilm(title, year, author, license, resolution, codecs, folder, filename, youtubeId) {
+    function commonsFilm(title, year, author, license, resolution, codecs, folder, filename) {
         var path = folder + filename;
         return {
             title: title,
@@ -306,17 +241,8 @@
                     title: 'Full HD',
                     subtitle: 'WebM · VP9',
                     url: commons + 'transcoded/' + path + '/' + filename + '.1080p.vp9.webm'
-                },
-                youtubeStream(youtubeId)
+                }
             ]
-        };
-    }
-
-    function youtubeStream(id) {
-        return {
-            title: 'Воспроизвести',
-            subtitle: 'Качество выбирает YouTube',
-            url: 'https://www.youtube.com/watch?v=' + id
         };
     }
 
@@ -412,7 +338,7 @@
             return {
                 title: stream.title,
                 subtitle: stream.subtitle + ' · ' + film.credit,
-                action: function () { playCatalogStream(film, stream); }
+                action: function () { play(film.title, stream.url); }
             };
         }), controller, onBack);
     }
@@ -796,44 +722,6 @@
             /^https?:\/\/(?:www\.)?creativecommons\.org\/(?:publicdomain\/(?:mark|zero)\/1\.0|licenses\/by(?:-nc)?(?:-sa|-nd)?\/[0-9.]+)\/?$/i.test(value);
     }
 
-    function playArchive(title, url) {
-        var avPlay = lampa.Platform && lampa.Platform.is('tizen') &&
-            lampa.Storage.field && lampa.Storage.field('player') === 'tizen';
-        if (avPlay || !lampa.Modal || typeof lampa.Modal.open !== 'function') {
-            play(title, url);
-            return;
-        }
-
-        // Archive downloads may redirect to a media server without CORS.
-        var video = document.createElement('video');
-        video.title = title;
-        video.controls = true;
-        video.autoplay = true;
-        video.setAttribute('playsinline', '');
-        video.style.cssText = 'display:block;width:100%;height:62vh;background:#000';
-        video.addEventListener('error', function () {
-            if (video.hasAttribute('src')) lampa.Noty.show('Не удалось открыть этот файл Internet Archive');
-        });
-        video.src = url;
-
-        function close() {
-            video.pause();
-            video.removeAttribute('src');
-            video.load();
-            lampa.Modal.close();
-            lampa.Controller.toggle('content');
-        }
-
-        lampa.Modal.open({
-            title: 'Internet Archive',
-            html: window.$(video),
-            size: 'large',
-            buttons_position: 'outside',
-            buttons: [{ name: 'Закрыть', onSelect: close }],
-            onBack: close
-        });
-    }
-
     function archiveFiles(item, id, runtime) {
         if (!item || !item.metadata || !archiveLicense(item.metadata.licenseurl) || !Array.isArray(item.files)) return [];
         return item.files.filter(function (file) {
@@ -890,7 +778,7 @@
                         return {
                             title: resolution ? 'MP4 · ' + resolution : 'MP4',
                             subtitle: 'Internet Archive',
-                            action: function () { playArchive(cardTitle(movie), file.url); }
+                            action: function () { play(cardTitle(movie), file.url); }
                         };
                     });
                     done(rows.length ? {
@@ -951,7 +839,7 @@
         api.addParam({
             component: 'open4k',
             param: { name: 'open4k_default_source', type: 'select', default: 'auto', values: {
-                auto: 'Автоматически', vix: 'VixSrc', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
+                auto: 'Автоматически', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
                 archive: 'Internet Archive', catalog: 'Подборка 4K'
             } },
             field: { name: 'Источник по умолчанию', description: 'Открывается при входе в карточку просмотра.' }
@@ -960,14 +848,14 @@
 
     function MovieScreen(options) {
         var self = this, $ = window.$, movie = options.movie || {};
-        var names = { vix: 'VixSrc', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
+        var names = { broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
         var title = cardTitle(movie), original = movie.original_title || movie.original_name || '';
         var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
         var film = findFilm(movie);
         var query = title, serial = 0, alive = true, last, loaded = {};
         var pref = lampa.Storage.get('open4k_default_source', 'auto');
         var order = film ? ['catalog','collaps'] : isAnimation(movie) ? ['anime','collaps'] : ['collaps'];
-        order.unshift('vix');
+        if (pref === 'vix') { pref = 'auto'; lampa.Storage.set('open4k_default_source', pref); }
         order.push('broadcast');
         if (!isSeries(movie) && year) order.push('archive');
         if (!Object.prototype.hasOwnProperty.call(names, pref)) pref = 'auto';
@@ -1014,7 +902,7 @@
             function apply(value) {
                 value = String(value || '').trim();
                 if (!value) return;
-                if ((source === 'collaps' || source === 'vix') && value !== title && lampa.Search) {
+                if (source === 'collaps' && value !== title && lampa.Search) {
                     lampa.Search.open({input:value}); return;
                 }
                 query = value; loaded = {}; load(false);
@@ -1083,21 +971,25 @@
             if (key === 'catalog') {
                 var match = findFilm(search);
                 done(match && {title:names[key],rows:match.streams.map(function (stream) {
-                    return {title:stream.title,subtitle:stream.subtitle,action:function () { playCatalogStream(match,stream); }};
+                    return {title:stream.title,subtitle:stream.subtitle,action:function () { play(match.title,stream.url); }};
                 })});
-            } else if (key === 'vix') vixSource(movie, done);
-            else if (key === 'broadcast') broadcasterSource(search,done);
+            } else if (key === 'broadcast') broadcasterSource(search,done);
             else if (key === 'archive') {
                 if (isSeries(movie) || !year) done(null); else archiveSource(search,Number(year),done);
             } else if (key === 'anime') aniLibertySource(search,done);
             else {
                 var ids = collapsIds(movie);
                 var tmdb = lampa.Api && lampa.Api.sources && lampa.Api.sources.tmdb;
+                function resolve(ids) {
+                    if (alive && id === serial) collapsSource(movie,ids,done);
+                }
+                function fallback() { indexedIds(movie,resolve); }
                 if (!ids.length && movie.source === 'tmdb' && tmdb && tmdb.external_ids) {
                     tmdb.external_ids({id:movie.id,type:isSeries(movie)?'tv':'movie'},function (external) {
-                        if (alive && id === serial) collapsSource(movie,collapsIds(external || {}),done);
-                    },function () { done(null); });
-                } else collapsSource(movie,ids,done);
+                        var externalIds = collapsIds(external || {});
+                        if (externalIds.length) resolve(externalIds); else fallback();
+                    },fallback);
+                } else if (ids.length) resolve(ids); else fallback();
             }
         }
         this.create = function () {
