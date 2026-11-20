@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('cc741937580dc9a5aa2739c79d56cec92ec85961c98b587a22ccabcc90593994'));
+}('452f3daaf20338bc40ee3cc5d2485a058755d1b33269a591ca61396eda1b6a2b'));
 
 (function () {
     'use strict';
@@ -326,8 +326,9 @@
         return '';
     }
 
-    function collapsPlayback(title, media, url) {
+    function collapsPlayback(title, media, url, quality) {
         var video = { title: title, url: url, launch_player: 'lampa' };
+        if (quality) video.quality = quality;
         if (media.audio && Array.isArray(media.audio.names)) {
             video.translate = { tracks: media.audio.names.map(function (name) {
                 return { language: typeof name === 'string' ? name.replace(/[<>]/g, '').slice(0, 120) : '' };
@@ -341,10 +342,10 @@
         var validDash = typeof dash === 'string' &&
             /^https:\/\/(?:[a-z0-9-]+\.)*interkh\.com\/[a-z0-9_./%-]+\.mpd(?:\?[^\s<>"'#\\]*)?$/i.test(dash);
         var names = media.audio && media.audio.names;
-        function launch(url) {
+        function launch(url,quality) {
             if (onPlay) onPlay();
             if (!Array.isArray(names) || !names.length || !lampa.PlayerVideo || !lampa.Player.listener) {
-                collapsPlayback(title, media, url);
+                collapsPlayback(title, media, url,quality);
                 return;
             }
             var events = lampa.PlayerVideo.listener;
@@ -362,7 +363,7 @@
                     }
                     events.follow('tracks', select);
                     lampa.Player.listener.follow('destroy', clear);
-                    collapsPlayback(title, media, url);
+                    collapsPlayback(title, media, url,quality);
                 } };
             });
             if (voices[voiceIndex]) voices[voiceIndex].action();
@@ -381,10 +382,10 @@
             return label;
         }, function (resolution) {
             if (!resolution) { launch(hls); return; }
-            showPicker('Качество · ' + title, [
-                { title: 'DASH · до ' + resolution, action: function () { launch(dash); } },
-                { title: 'HLS' + (media.resolution ? ' · до ' + media.resolution : ''), action: function () { launch(hls); } }
-            ], 'content');
+            var quality = {};
+            quality['HLS' + (media.resolution ? ' · ' + media.resolution : '')] = hls;
+            quality['DASH · ' + resolution] = dash;
+            launch(hls,quality);
         });
     }
 
@@ -544,20 +545,24 @@
         function unavailable() { lampa.Noty.show('Источник не вернул доступный вариант Full HD или 4K'); }
         function qualities(item,label,vast) {
             if (!item || item.method !== 'play' || !mediaUrl(item.url)) { unavailable(); return; }
-            var rows = [];
+            var variants = [];
             function add(w,h,url) {
-                if ((w < 1920 && h < 1080) || !mediaUrl(url)) return;
-                rows.push({w:w,title:w+'×'+h,action:function () {
-                    lampa.Player.play({title:title+' · '+label,url:url,launch_player:'lampa',vast:item.vast || vast});
-                }});
+                if (w && h && mediaUrl(url)) variants.push({w:w,h:h,url:url});
             }
             function display() {
                 if (!current()) return;
-                rows.sort(function (a,b) { return b.w-a.w; });
-                if (rows.length) showPicker('Качество · '+label,rows,'content'); else unavailable();
+                variants.sort(function (a,b) { return b.w-a.w || b.h-a.h; });
+                var best = variants[0];
+                if (!best || (best.w < 1920 && best.h < 1080)) { unavailable(); return; }
+                var quality = {};
+                variants.forEach(function (v) {
+                    var size = v.w+'×'+v.h;
+                    if (!quality[size]) quality[size] = v.url;
+                });
+                lampa.Player.play({title:title+' · '+label,url:best.url,quality:quality,launch_player:'lampa',vast:item.vast || vast});
             }
             var files = Object.keys(item.quality || {}).filter(function (k) {
-                return /^(1080|1440|2160)p$/.test(k) && mediaUrl(item.quality[k]);
+                return /^\d{3,4}p$/.test(k) && mediaUrl(item.quality[k]);
             });
             if (files.length) {
                 var remaining = files.length;
