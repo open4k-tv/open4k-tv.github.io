@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('428a823846331f154c875463d23d300d40668ab183d364980fe0d0f75a742a5b'));
+}('1eb160f6edfd8c9c1a5d53b87696465212c723fa813d293c481aad066842206a'));
 
 (function () {
     'use strict';
@@ -472,7 +472,7 @@
                     if (entry.type === 1 && entry.width && entry.height) video = entry;
                     if (entry.type === 2) {
                         var lang = entry.lang || 'eng';
-                        if (audio.indexOf(lang) < 0) audio.push(lang);
+                        audio.push(lang);
                     }
                 } else if (track && pos + size <= end) {
                     if ((id === 0xb0 || id === 0xba || id === 0x83) && size <= 4) {
@@ -506,7 +506,7 @@
         xhr.send();
     }
 
-    function hubFiles(id, title, done) {
+    function hubFiles(id, title, done, russianOnly) {
         var type = id.indexOf(':') >= 0 ? 'series' : 'movie';
         readResponse('https://hdhub.thevolecitor.qzz.io/stream/' + type + '/' + id + '.json',12000,function (r) {
             return JSON.parse(r.responseText);
@@ -524,12 +524,16 @@
                 if (cursor >= files.length) return;
                 var file = files[cursor++];
                 probeUhd(file.url,function (meta) {
-                    if (meta) {
+                    if (meta && (!russianOnly || meta.audio.some(function (lang) { return /^(ru|rus)(-|$)/i.test(lang); }))) {
                         var v = meta.video, provider = String(file.name).split(' ')[0];
-                        var label = [provider,v.width + '×' + v.height,meta.audio.join(' / ')].filter(Boolean).join(' · ');
+                        var label = [provider,v.width + '×' + v.height,meta.audio.filter(function (lang,i,all) { return all.indexOf(lang) === i; }).join(' / ')].filter(Boolean).join(' · ');
                         var size = Number((file.behaviorHints || {}).videoSize);
                         rows.push({title:label, subtitle:[v.codec, size > 0 ? (size / 1073741824).toFixed(1) + ' ГиБ' : '', 'MKV'].filter(Boolean).join(' · '),
-                            action:function () { play(title,file.url); }});
+                            action:function () {
+                                if (!russianOnly) { play(title,file.url); return; }
+                                var ru = meta.audio.filter(function (lang) { return /^(ru|rus)(-|$)/i.test(lang); })[0];
+                                choosePlayback(title,{audio:{names:meta.audio}},file.url,meta.audio.indexOf(ru));
+                            }});
                     }
                     if (--pending) next();
                     else done(rows.length ? {title:'HdHub / 4KHDHub',rows:rows} : null);
@@ -539,13 +543,98 @@
         });
     }
 
-    function hubSource(movie, done) {
+    function veoSource(movie, done) {
+        function lookup(ids) {
+            var keys = ids.map(function (id) { return id.replace('imdb/','').replace('kp/','kp'); });
+            function next() {
+                if (!keys.length) { done(null); return; }
+                var key = keys.shift(), shard = Number(key.slice(2)) % 64;
+                readJson('https://open4k-tv.github.io/veo/' + shard + '.json', function (index) {
+                    if (!index || !Number(index[key])) { next(); return; }
+                    readJson('https://api.rstprgapipt.com/balancer-api/proxy/playlists/catalog-api/episodes?content-id=' + Number(index[key]), function (items) {
+                        if (!Array.isArray(items) || !items.length) { done(null); return; }
+                        if (!isSeries(movie)) {
+                            var film = items.filter(function (item) { return item.season && Number(item.season.order) === 0; })[0];
+                            if (film) veoVoices(cardTitle(movie),film,done); else done(null);
+                            return;
+                        }
+                        var seasons = {};
+                        items.forEach(function (item) {
+                            var season = item.season && Number(item.season.order);
+                            if (!(season > 0 && item.order > 0 && Array.isArray(item.episodeVariants))) return;
+                            if (!seasons[season]) seasons[season] = [];
+                            seasons[season].push(item);
+                        });
+                        var rows = Object.keys(seasons).map(function (season) {
+                            return {title:'Сезон ' + season, subtitle:'Русские дорожки · HLS', action:function () {
+                                var episodes = seasons[season].sort(function (a,b) { return a.order-b.order; }).map(function (ep) {
+                                    return {title:'Серия ' + ep.order,action:function () {
+                                        var active = lampa.Activity.active();
+                                        veoVoices(cardTitle(movie) + ' · ' + season + '×' + ep.order,ep,function (found) {
+                                            if (lampa.Activity.active() !== active) return;
+                                            if (found) showPicker('Озвучка',found.rows,'content');
+                                            else lampa.Noty.show('Русская дорожка в Full HD или 4K не найдена');
+                                        });
+                                    }};
+                                });
+                                showPicker('Сезон ' + season,episodes,'content');
+                            }};
+                        });
+                        done(rows.length ? {title:'VeoVeo',rows:rows} : null);
+                    });
+                });
+            }
+            next();
+        }
+        var known = collapsIds(movie);
+        if (known.length) lookup(known); else resolveMovieIds(movie,lookup);
+    }
+
+    function veoVoices(title,item,done) {
+        var variants = (item.episodeVariants || []).filter(function (v) {
+            return v && /^https:\/\/api\.rstprgapipt\.com\/[^\s"<>]+\.m3u8(?:\?[^\s"<>]*)?$/i.test(v.filepath);
+        });
+        function next() {
+            if (!variants.length) { done(null); return; }
+            readResponse(variants.shift().filepath,6000,function (r) {
+                var lines = r.responseText.split(/\r?\n/), audio = {}, layers = [];
+                lines.forEach(function (line) {
+                    var group, name;
+                    if (/^#EXT-X-MEDIA:/.test(line) && /\bTYPE=AUDIO\b/.test(line)) {
+                        group = /\bGROUP-ID="([^"]+)"/.exec(line);
+                        name = /\bNAME="([^"]+)"/.exec(line);
+                        if (!group || !name) return;
+                        if (!audio[group[1]]) audio[group[1]] = [];
+                        audio[group[1]].push({name:name[1],ru:/\bLANGUAGE="(?:ru|rus)(?:-[^"]+)?"|\((?:RU|RUS)\)|русск/i.test(line)});
+                    } else if (/^#EXT-X-STREAM-INF:/.test(line)) {
+                        var size = /\bRESOLUTION=(\d+)x(\d+)/.exec(line);
+                        group = /\bAUDIO="([^"]+)"/.exec(line);
+                        if (size && group && (+size[1] >= 1920 || +size[2] >= 1080)) layers.push({w:+size[1],h:+size[2],group:group[1]});
+                    }
+                });
+                layers.sort(function (a,b) { return b.w-a.w; });
+                var best = layers.filter(function (layer) { return (audio[layer.group] || []).some(function (t) { return t.ru; }); })[0];
+                if (!best || !/^https:\/\//.test(r.responseURL)) return null;
+                var tracks = audio[best.group], url = r.responseURL;
+                var media = {audio:{names:tracks.map(function (t) { return t.name; })}};
+                var rows = [];
+                tracks.forEach(function (track,index) {
+                    if (track.ru) rows.push({title:track.name,subtitle:'VeoVeo · HLS до ' + best.w + '×' + best.h,
+                        action:function () { choosePlayback(title,media,url,index); }});
+                });
+                return {title:'VeoVeo',rows:rows};
+            },function (found) { if (found) done(found); else next(); });
+        }
+        next();
+    }
+
+    function hubSource(movie, done, russianOnly) {
         function resolve(ids) {
             var imdb = (ids || []).filter(function (id) { return /^imdb\/tt\d+$/.test(id); })[0];
             if (!imdb) { done(null); return; }
             imdb = imdb.slice(5);
             var title = cardTitle(movie);
-            if (!isSeries(movie)) { hubFiles(imdb,title,done); return; }
+            if (!isSeries(movie)) { hubFiles(imdb,title,done,russianOnly); return; }
             var rows = (movie.seasons || []).filter(function (s) {
                 return s.season_number > 0 && s.episode_count > 0 && s.episode_count <= 5000;
             }).map(function (s) {
@@ -560,12 +649,16 @@
                                 if (lampa.Activity.active() !== active) return;
                                 if (found) showPicker(title,found.rows,'content');
                                 else lampa.Noty.show('Для этой серии доступный файл 4K не найден');
-                            });
+                            },russianOnly);
                         }});
                 }};
             });
             done(rows.length ? {title:'HdHub / 4KHDHub',rows:rows} : null);
         }
+        resolveMovieIds(movie,resolve);
+    }
+
+    function resolveMovieIds(movie, resolve) {
         var ids = collapsIds(movie);
         if (ids.some(function (id) { return id.indexOf('imdb/') === 0; })) { resolve(ids); return; }
         var tmdb = lampa.Api && lampa.Api.sources && lampa.Api.sources.tmdb;
@@ -1006,7 +1099,7 @@
         api.addParam({
             component: 'open4k',
             param: { name: 'open4k_default_source', type: 'select', default: 'auto', values: {
-                auto: 'Автоматически', hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
+                auto: 'Автоматически', veo:'VeoVeo · Русские озвучки', hubru:'HdHub · 4K с русским звуком', hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
                 archive: 'Internet Archive', catalog: 'Подборка 4K'
             } },
             field: { name: 'Источник по умолчанию', description: 'Открывается при входе в карточку просмотра.' }
@@ -1015,7 +1108,7 @@
 
     function MovieScreen(options) {
         var self = this, $ = window.$, movie = options.movie || {};
-        var names = { hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
+        var names = { veo:'VeoVeo · Русские озвучки', hubru:'HdHub · 4K с русским звуком', hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
         var title = cardTitle(movie), original = movie.original_title || movie.original_name || '';
         var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
         var film = findFilm(movie);
@@ -1023,7 +1116,8 @@
         var pref = lampa.Storage.get('open4k_default_source', 'auto');
         var order = film ? ['catalog','collaps'] : isAnimation(movie) ? ['anime','collaps'] : ['collaps'];
         if (lampa.Torrent && lampa.Torserver && lampa.Torserver.url && lampa.Torserver.url()) order.unshift('rutor','kinozal');
-        order.unshift('hub');
+        if (isSeries(movie)) order.unshift('veo','hubru');
+        else order.unshift('hubru','veo');
         if (pref === 'vix') { pref = 'auto'; lampa.Storage.set('open4k_default_source', pref); }
         order.push('broadcast');
         if (!isSeries(movie) && year) order.push('archive');
@@ -1071,7 +1165,7 @@
             function apply(value) {
                 value = String(value || '').trim();
                 if (!value) return;
-                if ((source === 'collaps' || source === 'hub') && value !== title && lampa.Search) {
+                if ((source === 'collaps' || source === 'hub' || source === 'veo' || source === 'hubru') && value !== title && lampa.Search) {
                     lampa.Search.open({input:value}); return;
                 }
                 query = value; loaded = {}; load(false);
@@ -1131,7 +1225,7 @@
                     source = order[order.indexOf(key) + 1]; load(true);
                 } else draw(rows);
             }
-            if (key !== 'hub' && Object.prototype.hasOwnProperty.call(loaded,key)) { done(loaded[key]); return; }
+            if (key !== 'hub' && key !== 'hubru' && key !== 'veo' && Object.prototype.hasOwnProperty.call(loaded,key)) { done(loaded[key]); return; }
             var search = $.extend({},movie);
             if (query !== title) {
                 search.title = search.name = query;
@@ -1142,7 +1236,8 @@
                 done(match && {title:names[key],rows:match.streams.map(function (stream) {
                     return {title:stream.title,subtitle:stream.subtitle,action:function () { play(match.title,stream.url); }};
                 })});
-            } else if (key === 'hub') hubSource(movie,done);
+            } else if (key === 'veo') veoSource(movie,done);
+            else if (key === 'hub' || key === 'hubru') hubSource(movie,done,key === 'hubru');
             else if (key === 'rutor' || key === 'kinozal') trackerSource(search,key,done);
             else if (key === 'broadcast') broadcasterSource(search,done);
             else if (key === 'archive') {
