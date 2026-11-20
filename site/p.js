@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('77f75912d48dad6b0f1d2b8b82cf07d22f6c8be165839cb8d754a2cd36398528'));
+}('cc741937580dc9a5aa2739c79d56cec92ec85961c98b587a22ccabcc90593994'));
 
 (function () {
     'use strict';
@@ -109,8 +109,6 @@
     var pagesHost = window.open4kPages;
     if (!lampa || (window.open4kPluginLoaded && !pagesHost)) return;
 
-    var aniLibertyApi = 'https://api.anilibria.app/api/v1';
-    var archive = 'https://archive.org';
     var collapsMirrors = ['https://api.nextembed.ws/embed/', 'https://api.kinogram.best/embed/'];
     var cardRequest = 0;
 
@@ -118,48 +116,7 @@
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
         'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>';
-    var bunny = 'https://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_';
-    var commons = 'https://upload.wikimedia.org/wikipedia/commons/';
-
-    var films = [
-        {
-            title: 'Big Buck Bunny',
-            year: 2008,
-            credit: 'Blender Foundation, версия Sunflower — Janus B. Kristensen · CC BY 3.0',
-            streams: [
-                { title: '4K · 3840×2160', subtitle: 'MP4 · H.264 · 30 кадров/с', url: bunny + '2160p_30fps_normal.mp4' },
-                { title: 'Akamai · до 3840×2160', subtitle: 'DASH · H.264', url: 'https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd' },
-                { title: 'Full HD', subtitle: 'MP4 · H.264 · 30 кадров/с', url: bunny + '1080p_30fps_normal.mp4' }
-            ]
-        },
-        {
-            title: 'Sintel',
-            year: 2010,
-            credit: 'Blender Foundation · Shaka',
-            streams: [{ title: 'Shaka · до 3840×1636', subtitle: 'DASH · H.264', url: 'https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd' }]
-        },
-        commonsFilm('Tears of Steel', 2012, 'Blender Institute', '3.0', '3840×1714', 'VP8 / Vorbis',
-            '1/10/', 'Tears_of_Steel_in_4k_-_Official_Blender_Foundation_release.webm'),
-        commonsFilm('Charge', 2022, 'Blender Studio', '4.0', '3840×1608', 'VP9 / Opus',
-            '7/7a/', 'Charge_-_Blender_Open_Movie-full_movie.webm'),
-        commonsFilm('Glass Half', 2015, 'Blender Foundation', '4.0', '3840×2160', 'VP9 / Opus',
-            '0/02/', 'Glass_Half_-_Blender_Open_Movie-full_movie.webm'),
-        commonsFilm('SINGULARITY', 2026, 'Blender Studio', '4.0', '3840×1608', 'AV1 / Opus',
-            'f/f2/', 'SINGULARITY_-_Blender_Open_Movie-full_movie.webm')
-    ];
-
-    var classics = [
-        archiveFeature('Шарада', 'Charade', 1963, 'charade-1963-4k', 'Charade (1963) 4K.mp4', '3840×2160'),
-        archiveFeature('Ночь живых мертвецов', 'Night of the Living Dead', 1968, 'notld-4-k', 'NOTLD 4K.mp4', '2960×2160'),
-        archiveFeature('Генерал', 'The General', 1926, 'the-general-1926-remux-2160p-dts-hd-ma-51-hevc',
-            'The General (1926) - [REMUX-2160P][DTS-HD MA 5.1][HEVC].mkv', '3840×2160')
-    ];
-
-    function archiveFeature(title, original, year, id, file, resolution) {
-        return { title: title, original: original, year: year, credit: 'Internet Archive',
-            streams: [{ title: resolution, subtitle: file.split('.').pop().toUpperCase(),
-                url: archive + '/download/' + id + '/' + encodeURIComponent(file) }] };
-    }
+    var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB'};
 
     var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
 
@@ -193,61 +150,6 @@
             }
             done([]);
         });
-    }
-
-    function broadcasterSource(movie, done) {
-        var original = movie.original_title || movie.original_name;
-        var queries = [original, cardTitle(movie)].filter(function (value, index, all) {
-            return value && all.indexOf(value) === index;
-        });
-        var series = isSeries(movie);
-        function search() {
-            if (!queries.length) { done(null); return; }
-            var query = queries.shift(), name = normalizeTitle(query);
-            var payload = { queries: [{ fields: ['title', 'topic'], query: query }], size: 50 };
-            readResponse('https://mediathekviewweb.de/api/query', 5500, function (request) {
-                return JSON.parse(request.responseText);
-            }, function (body) {
-                var results = body && body.result && body.result.results;
-                var seen = {}, rows = [];
-                (Array.isArray(results) ? results : []).forEach(function (item) {
-                    var label = normalizeTitle(item.title), topic = normalizeTitle(item.topic);
-                    if (label !== name && !(series && (topic === name || label.indexOf(name + ' ') === 0))) return;
-                    if (item.duration < (series ? 300 : movie.runtime ? movie.runtime * 48 : 2400)) return;
-                    if (!series && movie.runtime && item.duration > movie.runtime * 75) return;
-                    var url = item.url_video_hd || item.url_video;
-                    if (typeof url !== 'string' || !/^https:\/\/[a-z0-9.-]+\/(?:[^\s<>"]+)(?:\.mp4|\.m3u8)(?:\?[^\s<>"]*)?$/i.test(url) || seen[url]) return;
-                    seen[url] = true;
-                    rows.push({ title: String(item.title), subtitle: item.channel + ' · ' +
-                        Math.round(item.duration / 60) + ' мин · Медиатека вещателя',
-                        action: function () { play(item.title, url); } });
-                });
-                if (rows.length) done({ title: 'MediathekView', rows: rows });
-                else search();
-            }, JSON.stringify(payload));
-        }
-        search();
-    }
-
-    function commonsFilm(title, year, author, license, resolution, codecs, folder, filename) {
-        var path = folder + filename;
-        return {
-            title: title,
-            year: year,
-            credit: author + ' · CC BY ' + license + ' · Wikimedia Commons',
-            streams: [
-                { title: '4K · ' + resolution, subtitle: 'WebM · ' + codecs, url: commons + path },
-                {
-                    title: 'Full HD',
-                    subtitle: 'WebM · VP9',
-                    url: commons + 'transcoded/' + path + '/' + filename + '.1080p.vp9.webm'
-                }
-            ]
-        };
-    }
-
-    function play(title, url) {
-        lampa.Player.play({ title: title, url: url, launch_player: 'lampa' });
     }
 
     function readResponse(url, timeout, read, done, body) {
@@ -333,14 +235,8 @@
         });
     }
 
-    function showFilm(film, controller, onBack) {
-        showPicker(film.title, film.streams.map(function (stream) {
-            return {
-                title: stream.title,
-                subtitle: stream.subtitle + ' · ' + film.credit,
-                action: function () { play(film.title, stream.url); }
-            };
-        }), controller, onBack);
+    function play(title, url) {
+        lampa.Player.play({ title: title, url: url, launch_player: 'lampa' });
     }
 
     function parseStreamUrl(value) {
@@ -380,40 +276,12 @@
     }
 
     function showCatalog(controller) {
-        function filmRow(film) {
-            return {
-                title: film.title + ' (' + film.year + ')',
-                subtitle: film.credit,
-                action: function () {
-                    showFilm(film, controller, function () { showCatalog(controller); });
-                }
-            };
-        }
-
-        var items = [{ title: 'Открытые короткометражки', separator: true }].concat(films.map(filmRow));
-        items.push({ title: 'Полнометражное кино', separator: true });
-        items = items.concat(classics.map(filmRow));
-        if (lampa.Input && typeof lampa.Input.edit === 'function') {
-            items.push({
-                title: 'Открыть свой поток',
-                subtitle: 'MP4, WebM, MKV, HLS или DASH',
-                action: function () { openStream(controller); }
-            });
-        }
-        showPicker(menuTitle, items, controller);
-    }
-
-    function findFilm(movie) {
-        if (isSeries(movie)) return;
-
-        var year = Number(String(movie.release_date || '').slice(0, 4));
-        var titles = [movie.title, movie.original_title].map(function (title) {
-            return typeof title === 'string' ? title.trim().toLowerCase() : '';
-        });
-        return films.concat(classics).filter(function (candidate) {
-            return candidate.year === year && (titles.indexOf(candidate.title.toLowerCase()) !== -1 ||
-                (candidate.original && titles.indexOf(candidate.original.toLowerCase()) !== -1));
-        })[0];
+        var items = [{title:'Найти фильм в Lampa',action:function () {
+            if (lampa.Search) lampa.Search.open({input:''});
+            else lampa.Noty.show('Откройте карточку фильма в Lampa');
+        }}];
+        if (lampa.Input && lampa.Input.edit) items.push({title:'Открыть свой поток',action:function () { openStream(controller); }});
+        showPicker(menuTitle,items,controller);
     }
 
     function cardTitle(movie) {
@@ -429,268 +297,9 @@
         return movie.media_type === 'tv' || !!(movie.first_air_date || movie.number_of_seasons);
     }
 
-    function isAnimation(movie) {
-        var genres = movie.genre_ids || movie.genres;
-        return Array.isArray(genres) && genres.some(function (genre) {
-            return Number(genre && typeof genre === 'object' ? genre.id : genre) === 16;
-        });
-    }
-
-    function normalizeTitle(title) {
-        if (typeof title !== 'string') return '';
-        return title.toLowerCase().replace(/ё/g, 'е').replace(/[\s:;,.!?()\[\]"«»'’\-–—]+/g, ' ').trim();
-    }
-
-    function readJson(url, done) {
-        readResponse(url, 4500, function (request) {
-            return JSON.parse(request.responseText);
-        }, done);
-    }
-
-    // Read Matroska track metadata from the first ranged response.
-    function mkvTracks(bytes) {
-        var video = {}, audio = [];
-        if (bytes[0] !== 0x1a || bytes[1] !== 0x45 || bytes[2] !== 0xdf || bytes[3] !== 0xa3) return;
-        function walk(pos, end, track, depth) {
-            while (pos < end && depth < 6) {
-                var lead = bytes[pos++], mask = 128, id = lead;
-                while (mask >= 16 && !(lead & mask) && pos < end) { id = id * 256 + bytes[pos++]; mask /= 2; }
-                if (mask < 16 || pos >= end) return;
-                lead = bytes[pos++]; mask = 128;
-                while (mask && !(lead & mask)) mask >>= 1;
-                if (!mask) return;
-                var size = lead & (mask - 1);
-                for (var bit = 128; bit > mask; bit >>= 1) {
-                    if (pos >= end) return;
-                    size = size * 256 + bytes[pos++];
-                }
-                var next = Math.min(end, pos + size);
-                if (id === 0x18538067 || id === 0x1654ae6b || id === 0xe0) walk(pos,next,track,depth+1);
-                else if (id === 0xae) {
-                    var entry = {};
-                    walk(pos,next,entry,depth+1);
-                    if (entry.type === 1 && entry.width && entry.height) video = entry;
-                    if (entry.type === 2) {
-                        var lang = entry.lang || 'eng';
-                        audio.push(lang);
-                    }
-                } else if (track && pos + size <= end) {
-                    if ((id === 0xb0 || id === 0xba || id === 0x83) && size <= 4) {
-                        var number = 0;
-                        for (var k = pos; k < next; k++) number = number * 256 + bytes[k];
-                        track[id === 0xb0 ? 'width' : id === 0xba ? 'height' : 'type'] = number;
-                    } else if ((id === 0x22b59c || id === 0x22b59d || id === 0x86) && size < 64) {
-                        var value = String.fromCharCode.apply(null,bytes.subarray(pos,next));
-                        if (/^[a-zA-Z0-9_./-]+$/.test(value)) track[id === 0x86 ? 'codec' : 'lang'] = value;
-                    }
-                }
-                pos = next;
-            }
-        }
-        walk(0,bytes.length,null,0);
-        if (video.width >= 1920 || video.height >= 1080) return {video:video, audio:audio};
-    }
-
-    function probeUhd(url, done) {
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', url, true);
-        xhr.timeout = 6000;
-        xhr.responseType = 'arraybuffer';
-        xhr.setRequestHeader('Range','bytes=0-131071');
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === 2 && xhr.status !== 206) xhr.abort();
-        };
-        xhr.onprogress = function (event) { if (event.loaded > 131072) xhr.abort(); };
-        xhr.onerror = xhr.ontimeout = xhr.onabort = function () { done(null); };
-        xhr.onload = function () { done(xhr.status === 206 && xhr.response && mkvTracks(new Uint8Array(xhr.response))); };
-        xhr.send();
-    }
-
-    function hubFiles(id, title, done, russianOnly) {
-        var type = id.indexOf(':') >= 0 ? 'series' : 'movie';
-        readResponse('https://hdhub.thevolecitor.qzz.io/stream/' + type + '/' + id + '.json',12000,function (r) {
-            return JSON.parse(r.responseText);
-        },function (data) {
-            var urls = {}, rows = [];
-            var files = (data && Array.isArray(data.streams) ? data.streams : []).filter(function (file) {
-                var quality = russianOnly ? /\b(?:1080p|2160p|4k)\b/i : /\b(?:2160p|4k)\b/i;
-                if (!file || !quality.test(file.name + ' ' + file.description)) return false;
-                if (!/^https:\/\/(?:[a-z0-9-]+\.r2\.cloudflarestorage\.com|pixeldrain\.(?:com|dev)|(?:gpdl|pixel)\.hubcloud\.mov|video-downloads\.googleusercontent\.com)\//i.test(file.url)) return false;
-                if (urls[file.url] || (file.behaviorHints && file.behaviorHints.proxyHeaders)) return false;
-                urls[file.url] = true; return true;
-            }).slice(0,16);
-            var pending = files.length, cursor = 0;
-            if (!pending) { done(null); return; }
-            function next() {
-                if (cursor >= files.length) return;
-                var file = files[cursor++];
-                probeUhd(file.url,function (meta) {
-                    if (meta && (russianOnly ? meta.audio.some(function (lang) { return /^(ru|rus)(-|$)/i.test(lang); }) : meta.video.width >= 3840 || meta.video.height >= 2160)) {
-                        var v = meta.video, provider = String(file.name).split(' ')[0];
-                        var label = [provider,v.width + '×' + v.height,meta.audio.filter(function (lang,i,all) { return all.indexOf(lang) === i; }).join(' / ')].filter(Boolean).join(' · ');
-                        var size = Number((file.behaviorHints || {}).videoSize);
-                        rows.push({title:label, subtitle:[v.codec, size > 0 ? (size / 1073741824).toFixed(1) + ' ГиБ' : '', 'MKV'].filter(Boolean).join(' · '),
-                            action:function () {
-                                if (!russianOnly) { play(title,file.url); return; }
-                                var ru = meta.audio.filter(function (lang) { return /^(ru|rus)(-|$)/i.test(lang); })[0];
-                                choosePlayback(title,{audio:{names:meta.audio}},file.url,meta.audio.indexOf(ru));
-                            }});
-                    }
-                    if (--pending) next();
-                    else done(rows.length ? {title:'HdHub / 4KHDHub',rows:rows} : null);
-                });
-            }
-            for (var n = 0; n < Math.min(3,files.length); n++) next();
-        });
-    }
-
-    function lookupCardTitle(movie, done) {
-        var year = String(movie.release_date || movie.first_air_date || movie.year || '').slice(0,4);
-        var titles = [movie.original_title || movie.original_name,cardTitle(movie)], seen = {};
-        function next() {
-            if (!titles.length || !/^\d{4}$/.test(year)) { done(null); return; }
-            var title = String(titles.shift() || '').toLowerCase().replace(/ё/g,'е').replace(/[^a-z0-9а-я]+/g,' ').trim();
-            var key = year + '/' + title, hash = 0;
-            if (!title || seen[key]) { next(); return; }
-            seen[key] = true;
-            for (var i = 0; i < key.length; i++) hash = (31 * hash + key.charCodeAt(i)) % 128;
-            readJson('https://open4k-tv.github.io/veo/title-' + hash + '.json',function (bucket) {
-                if (bucket && Array.isArray(bucket[key])) done(bucket[key]); else next();
-            });
-        }
-        next();
-    }
-
-    function veoSource(movie, done) {
-        function byTitle() {
-            lookupCardTitle(movie,function (entry) { if (entry) episodes(entry[0]); else done(null); });
-        }
-        function lookup(ids) {
-            var keys = ids.map(function (id) { return id.replace('imdb/','').replace('kp/','kp'); });
-            function next() {
-                if (!keys.length) { byTitle(); return; }
-                var key = keys.shift(), shard = Number(key.slice(2)) % 64;
-                readJson('https://open4k-tv.github.io/veo/' + shard + '.json', function (index) {
-                    if (!index || !Number(index[key])) { next(); return; }
-                    episodes(Number(index[key]));
-                });
-            }
-            next();
-        }
-        function episodes(contentId) {
-            readJson('https://api.rstprgapipt.com/balancer-api/proxy/playlists/catalog-api/episodes?content-id=' + contentId, function (items) {
-                if (!Array.isArray(items) || !items.length) { done(null); return; }
-                if (!isSeries(movie)) {
-                    var film = items.filter(function (item) { return item.season && Number(item.season.order) === 0; })[0];
-                    if (film) veoVoices(cardTitle(movie),film,done); else done(null);
-                    return;
-                }
-                var seasons = {};
-                items.forEach(function (item) {
-                    var season = item.season && Number(item.season.order);
-                    if (!(season > 0 && item.order > 0 && Array.isArray(item.episodeVariants))) return;
-                    if (!seasons[season]) seasons[season] = [];
-                    seasons[season].push(item);
-                });
-                var rows = Object.keys(seasons).map(function (season) {
-                    return {title:'Сезон ' + season, subtitle:'Русские дорожки · HLS', action:function () {
-                        var episodes = seasons[season].sort(function (a,b) { return a.order-b.order; }).map(function (ep) {
-                            return {title:'Серия ' + ep.order,action:function () {
-                                var active = lampa.Activity.active();
-                                veoVoices(cardTitle(movie) + ' · ' + season + '×' + ep.order,ep,function (found) {
-                                    if (lampa.Activity.active() !== active) return;
-                                    if (found) showPicker('Озвучка',found.rows,'content');
-                                    else lampa.Noty.show('Русская дорожка в Full HD или 4K не найдена');
-                                });
-                            }};
-                        });
-                        showPicker('Сезон ' + season,episodes,'content');
-                    }};
-                });
-                done(rows.length ? {title:'VeoVeo',rows:rows} : null);
-            });
-        }
-        var known = collapsIds(movie);
-        if (known.length) lookup(known);
-        else lookupCardTitle(movie,function (entry) {
-            if (entry) episodes(entry[0]); else resolveMovieIds(movie,lookup);
-        });
-    }
-
-    function veoVoices(title,item,done) {
-        var variants = (item.episodeVariants || []).filter(function (v) {
-            return v && /^https:\/\/api\.rstprgapipt\.com\/[^\s"<>]+\.m3u8(?:\?[^\s"<>]*)?$/i.test(v.filepath);
-        });
-        function next() {
-            if (!variants.length) { done(null); return; }
-            readResponse(variants.shift().filepath,6000,function (r) {
-                var lines = r.responseText.split(/\r?\n/), audio = {}, layers = [];
-                lines.forEach(function (line) {
-                    var group, name;
-                    if (/^#EXT-X-MEDIA:/.test(line) && /\bTYPE=AUDIO\b/.test(line)) {
-                        group = /\bGROUP-ID="([^"]+)"/.exec(line);
-                        name = /\bNAME="([^"]+)"/.exec(line);
-                        if (!group || !name) return;
-                        if (!audio[group[1]]) audio[group[1]] = [];
-                        audio[group[1]].push({name:name[1],ru:/\bLANGUAGE="(?:ru|rus)(?:-[^"]+)?"|\((?:RU|RUS)\)|русск/i.test(line)});
-                    } else if (/^#EXT-X-STREAM-INF:/.test(line)) {
-                        var size = /\bRESOLUTION=(\d+)x(\d+)/.exec(line);
-                        group = /\bAUDIO="([^"]+)"/.exec(line);
-                        if (size && group && (+size[1] >= 1920 || +size[2] >= 1080)) layers.push({w:+size[1],h:+size[2],group:group[1]});
-                    }
-                });
-                layers.sort(function (a,b) { return b.w-a.w; });
-                var best = layers.filter(function (layer) { return (audio[layer.group] || []).some(function (t) { return t.ru; }); })[0];
-                if (!best || !/^https:\/\//.test(r.responseURL)) return null;
-                var tracks = audio[best.group], url = r.responseURL;
-                var media = {audio:{names:tracks.map(function (t) { return t.name; })}};
-                var rows = [];
-                tracks.forEach(function (track,index) {
-                    if (track.ru) rows.push({title:track.name,subtitle:'VeoVeo · HLS до ' + best.w + '×' + best.h,
-                        action:function () { choosePlayback(title,media,url,index); }});
-                });
-                return {title:'VeoVeo',rows:rows};
-            },function (found) { if (found) done(found); else next(); });
-        }
-        next();
-    }
-
-    function hubSource(movie, done, russianOnly) {
-        function resolve(ids) {
-            var imdb = (ids || []).filter(function (id) { return /^imdb\/tt\d+$/.test(id); })[0];
-            if (!imdb) { done(null); return; }
-            imdb = imdb.slice(5);
-            var title = cardTitle(movie);
-            if (!isSeries(movie)) { hubFiles(imdb,title,done,russianOnly); return; }
-            var rows = (movie.seasons || []).filter(function (s) {
-                return s.season_number > 0 && s.episode_count > 0 && s.episode_count <= 5000;
-            }).map(function (s) {
-                return {title:'Сезон ' + s.season_number, subtitle:'Проверить серию в 4K',action:function () {
-                    var episodes = [];
-                    for (var i = 1; i <= s.episode_count; i++) episodes.push({title:'Серия ' + i,number:i});
-                    lampa.Select.show({title:title,items:episodes,onBack:function () { lampa.Controller.toggle('content'); },
-                        onSelect:function (ep) {
-                            lampa.Controller.toggle('content');
-                            var active = lampa.Activity.active();
-                            hubFiles(imdb + ':' + s.season_number + ':' + ep.number,title + ' · ' + ep.title,function (found) {
-                                if (lampa.Activity.active() !== active) return;
-                                if (found) showPicker(title,found.rows,'content');
-                                else lampa.Noty.show('Для этой серии доступный файл 4K не найден');
-                            },russianOnly);
-                        }});
-                }};
-            });
-            done(rows.length ? {title:'HdHub / 4KHDHub',rows:rows} : null);
-        }
-        resolveMovieIds(movie,function (ids) {
-            if (ids.some(function (id) { return id.indexOf('imdb/') === 0; })) resolve(ids);
-            else lookupCardTitle(movie,function (entry) { resolve(entry ? collapsIds({imdb_id:entry[1]}) : []); });
-        });
-    }
-
     function resolveMovieIds(movie, resolve) {
         var ids = collapsIds(movie);
-        if (ids.some(function (id) { return id.indexOf('imdb/') === 0; })) { resolve(ids); return; }
+        if (ids.length) { resolve(ids); return; }
         var tmdb = lampa.Api && lampa.Api.sources && lampa.Api.sources.tmdb;
         function fallback() { indexedIds(movie,resolve); }
         if ((!movie.source || movie.source === 'tmdb') && movie.id && tmdb && tmdb.external_ids) {
@@ -698,43 +307,6 @@
                 if (external && external.imdb_id) resolve(collapsIds(external)); else fallback();
             },fallback);
         } else fallback();
-    }
-
-    function trackerSource(movie, tracker, done) {
-        var labels = {rutor:'RuTor', kinozal:'Кинозал'};
-        var original = movie.original_title || movie.original_name;
-        var queries = [original, cardTitle(movie)].filter(function (value, index, all) {
-            return value && all.indexOf(value) === index;
-        });
-        var titles = queries.map(normalizeTitle);
-        var year = Number(String(movie.release_date || movie.first_air_date || '').slice(0,4));
-        function search() {
-            if (!queries.length || !lampa.Torrent || !lampa.Torrent.start) { done(null); return; }
-            readJson('https://jacred.su/api/v1.0/torrents?search=' + encodeURIComponent(queries.shift()), function (items) {
-                var seen = {};
-                var releases = (Array.isArray(items) ? items : []).filter(function (item) {
-                    if (!item || item.tracker !== tracker || !item.title) return false;
-                    if (titles.indexOf(normalizeTitle(item.name)) < 0 && titles.indexOf(normalizeTitle(item.originalname)) < 0) return false;
-                    if (!isSeries(movie) && year && Number(item.relased) !== year) return false;
-                    if (!(Number(item.quality) >= 2160 || /\b(2160p?|4k|uhd)\b/i.test(item.title))) return false;
-                    var hash = /^magnet:\?xt=urn:btih:([a-f\d]{40}|[a-z2-7]{32})(?:&|$)/i.exec(item.magnet);
-                    if (!hash || seen[hash[1].toLowerCase()]) return false;
-                    seen[hash[1].toLowerCase()] = true;
-                    return true;
-                }).sort(function (a,b) { return (Number(b.sid) || 0) - (Number(a.sid) || 0); });
-                if (!releases.length) { search(); return; }
-                done({title:labels[tracker], rows:releases.map(function (item) {
-                    return {title:item.title, subtitle:[labels[tracker],item.sizeName,'Раздают: ' + (Number(item.sid) || 0)].filter(Boolean).join(' · '),
-                        action:function () {
-                            if (!lampa.Torserver || !lampa.Torserver.url || !lampa.Torserver.url()) {
-                                lampa.Noty.show('Для просмотра раздач укажите TorrServer в настройках Lampa'); return;
-                            }
-                            lampa.Torrent.start({Title:item.title,title:item.title,MagnetUri:item.magnet,Size:Number(item.size)},movie);
-                        }};
-                })});
-            });
-        }
-        search();
     }
 
     function collapsIds(movie) {
@@ -930,192 +502,97 @@
         next();
     }
 
-    function animeRelease(movie, done) {
-        var primary = cardTitle(movie);
-        var original = movie.original_title || movie.original_name;
-        var normalized = [normalizeTitle(primary), normalizeTitle(original)];
-        var year = Number(String(movie.first_air_date || movie.release_date || '').slice(0, 4));
-        function words(title) { return title.split(' ').sort().join(' '); }
-        var unordered = year ? normalized.map(words) : [];
-        var queries = [primary];
-        if (normalized[1] && normalized[0] !== normalized[1]) queries.push(original.trim());
-
-        function search() {
-            if (!queries.length) {
-                done(null);
-                return;
+    function mp4Size(url,done) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET',url,true);
+        xhr.responseType = 'arraybuffer';
+        xhr.timeout = 7000;
+        xhr.setRequestHeader('Range','bytes=0-8191');
+        xhr.onreadystatechange = function () { if (xhr.readyState === 2 && xhr.status !== 206) xhr.abort(); };
+        xhr.onprogress = function (e) { if (e.loaded > 8192) xhr.abort(); };
+        xhr.onerror = xhr.ontimeout = xhr.onabort = function () { done(null); };
+        xhr.onload = function () {
+            if (xhr.status !== 206 || !xhr.response) { done(null); return; }
+            var view = new DataView(xhr.response);
+            for (var i = 4; i + 8 < view.byteLength; i++) {
+                if (view.getUint32(i) !== 0x746b6864) continue;
+                var length = view.getUint32(i-4), end = i-4+length;
+                if (length < 92 || end > view.byteLength) continue;
+                var w = view.getUint32(end-8) >>> 16, h = view.getUint32(end-4) >>> 16;
+                if (w && h) { done({w:w,h:h}); return; }
             }
-            readJson(aniLibertyApi + '/app/search/releases?query=' + encodeURIComponent(queries.shift()), function (results) {
-                var matches = Array.isArray(results) ? results.filter(function (release) {
-                    if (!release || !/^[1-9][0-9]{0,9}$/.test(release.id) || !release.name ||
-                        release.is_blocked_by_geo || release.is_blocked_by_copyrights ||
-                        (year && Number(release.year) !== year)) return false;
-                    if (release.type && (release.type.value === 'MOVIE') === isSeries(movie)) return false;
-                    return [release.name.main, release.name.english, release.name.alternative].some(function (name) {
-                        var match = normalizeTitle(name);
-                        return match && (normalized.indexOf(match) !== -1 || unordered.indexOf(words(match)) !== -1);
-                    });
-                }) : [];
-                if (matches.length === 1) readJson(aniLibertyApi + '/anime/releases/' + matches[0].id, done);
-                else search();
+            done(null);
+        };
+        xhr.send();
+    }
+
+    function onlineSource(key,movie,done,current) {
+        var base = 'https://z01.online/lite/' + key, title = cardTitle(movie);
+        var query = {id:movie.tmdb_id || movie.id, title:title, original_title:movie.original_title || movie.original_name,
+            year:String(movie.release_date || movie.first_air_date || '').slice(0,4), serial:isSeries(movie)?1:0,
+            imdb_id:movie.imdb_id || (movie.external_ids || {}).imdb_id, kinopoisk_id:movie.kinopoisk_id || movie.kp_id,rjson:true};
+        function read(url,callback) {
+            readResponse(url,10000,function (r) { return JSON.parse(r.responseText); },function (data) {
+                if (current()) callback(data);
             });
         }
-        search();
-    }
-
-    function animeStreams(episode) {
-        return [1080, 720, 480].reduce(function (streams, quality) {
-            var url = episode['hls_' + quality];
-            if (typeof url === 'string' &&
-                /^https:\/\/[a-z0-9-]+\.libria\.fun\/[a-z0-9_./%-]+\.m3u8(?:\?[^\s<>"#]*)?$/i.test(url)) {
-                streams[String(quality) + 'p'] = url;
-            }
-            return streams;
-        }, {});
-    }
-
-    function aniLibertySource(movie, done) {
-        animeRelease(movie, function (release) {
+        function apiUrl(url) {
+            if (typeof url !== 'string' || url.indexOf(base) !== 0 || !/^[/?]/.test(url.slice(base.length))) return '';
+            return url.replace(/([?&])rjson=[^&]*(&|$)/,'$1') + (url.indexOf('?') < 0 ? '?' : '&') + 'rjson=true';
+        }
+        function mediaUrl(url) { return typeof url === 'string' && /^https:\/\/z01\.online\/proxy\/[^\s<>"]+$/.test(url); }
+        function unavailable() { lampa.Noty.show('Источник не вернул доступный вариант Full HD или 4K'); }
+        function qualities(item,label,vast) {
+            if (!item || item.method !== 'play' || !mediaUrl(item.url)) { unavailable(); return; }
             var rows = [];
-            if (release && !release.is_blocked_by_geo && !release.is_blocked_by_copyrights && Array.isArray(release.episodes)) {
-                release.episodes.forEach(function (episode) {
-                    if (!episode || !isFinite(episode.ordinal) || Number(episode.ordinal) < 1) return;
-                    var streams = animeStreams(episode);
-                    var qualities = Object.keys(streams);
-                    if (!qualities.length) return;
-                    var title = 'Серия ' + Number(episode.ordinal);
-                    rows.push({
-                        title: title,
-                        subtitle: qualities.join(' · '),
-                        action: function () {
-                            lampa.Player.play({
-                                title: cardTitle(movie) + ' · ' + title,
-                                url: streams['1080p'] || streams['720p'] || streams['480p'],
-                                quality: streams,
-                                launch_player: 'lampa'
-                            });
-                        }
-                    });
-                });
+            function add(w,h,url) {
+                if ((w < 1920 && h < 1080) || !mediaUrl(url)) return;
+                rows.push({w:w,title:w+'×'+h,action:function () {
+                    lampa.Player.play({title:title+' · '+label,url:url,launch_player:'lampa',vast:item.vast || vast});
+                }});
             }
-            done(rows.length ? {
-                title: 'AniLiberty',
-                rows: rows,
-                subtitle: 'Русская озвучка · серий: ' + rows.length,
-                action: function (back) { showPicker(cardTitle(movie), rows, 'content', back); }
-            } : null);
-        });
-    }
-
-    function archiveLicense(value) {
-        return typeof value === 'string' &&
-            /^https?:\/\/(?:www\.)?creativecommons\.org\/(?:publicdomain\/(?:mark|zero)\/1\.0|licenses\/by(?:-nc)?(?:-sa|-nd)?\/[0-9.]+)\/?$/i.test(value);
-    }
-
-    function archiveFiles(item, id, runtime) {
-        if (!item || !item.metadata || !archiveLicense(item.metadata.licenseurl) || !Array.isArray(item.files)) return [];
-        return item.files.filter(function (file) {
-            var duration = Number(file && file.length);
-            return file && file.private !== true && file.private !== 'true' && file.private !== '1' &&
-                typeof file.name === 'string' && /^[^/\\\x00-\x1f]+\.mp4$/i.test(file.name) &&
-                (runtime ? Math.abs(duration - runtime) <= Math.min(600, runtime * 0.12) : duration >= 3000);
-        }).map(function (file) {
-            return {
-                url: archive + '/download/' + id + '/' + encodeURIComponent(file.name),
-                width: Number(file.width) || 0,
-                height: Number(file.height) || 0
-            };
-        });
-    }
-
-    function archiveSource(movie, year, done) {
-        var original = normalizeTitle(movie.original_title) || normalizeTitle(cardTitle(movie));
-        var local = normalizeTitle(cardTitle(movie));
-        var titles = original === local ? [local] : [original, local];
-        var phrase = titles.map(function (title) { return 'title:"' + title.replace(/["\\]/g, ' ') + '"'; }).join(' OR ');
-        var query = 'mediatype:movies AND (' + phrase + ') AND year:' + year + ' AND licenseurl:*';
-        var url = archive + '/advancedsearch.php?q=' + encodeURIComponent(query) +
-            '&output=json&rows=12&sort[]=downloads%20desc&fl[]=title&fl[]=year&fl[]=licenseurl&fl[]=identifier';
-        readJson(url, function (result) {
-            var docs = result && result.response && result.response.docs;
-            var matching = Array.isArray(docs) ? docs.filter(function (doc) {
-                var title = normalizeTitle(doc && doc.title);
-                return doc && Number(doc.year) === year && /^\w[\w.-]{0,99}$/.test(doc.identifier) &&
-                    archiveLicense(doc.licenseurl) && titles.some(function (candidate) {
-                        return title === candidate || title === candidate + ' ' + year;
-                    });
-            }).slice(0, 3) : [];
-            var pending = matching.length;
-            if (!pending) {
-                done(null);
-                return;
+            function display() {
+                if (!current()) return;
+                rows.sort(function (a,b) { return b.w-a.w; });
+                if (rows.length) showPicker('Качество · '+label,rows,'content'); else unavailable();
             }
-
-            var files = [];
-            matching.forEach(function (doc) {
-                readJson(archive + '/metadata/' + doc.identifier, function (item) {
-                    files = files.concat(archiveFiles(item, doc.identifier, Number(movie.runtime) * 60));
-                    if (--pending > 0) return;
-                    files.sort(function (a, b) { return b.width * b.height - a.width * a.height; });
-                    var seen = {};
-                    var rows = files.filter(function (file) {
-                        var resolution = file.width + '×' + file.height;
-                        if (seen[resolution]) return false;
-                        seen[resolution] = true;
-                        return true;
-                    }).slice(0, 5).map(function (file) {
-                        var resolution = file.width && file.height ? file.width + '×' + file.height : '';
-                        return {
-                            title: resolution ? 'MP4 · ' + resolution : 'MP4',
-                            subtitle: 'Internet Archive',
-                            action: function () { play(cardTitle(movie), file.url); }
-                        };
-                    });
-                    done(rows.length ? {
-                        title: 'Internet Archive',
-                        rows: rows,
-                        subtitle: 'Полный фильм · ' + rows[0].title,
-                        action: function (back) { showPicker(cardTitle(movie), rows, 'content', back); }
-                    } : null);
+            var files = Object.keys(item.quality || {}).filter(function (k) {
+                return /^(1080|1440|2160)p$/.test(k) && mediaUrl(item.quality[k]);
+            });
+            if (files.length) {
+                var remaining = files.length;
+                files.forEach(function (k) {
+                    var url = item.quality[k];
+                    mp4Size(url,function (s) { if (s) add(s.w,s.h,url); if (!--remaining) display(); });
                 });
-            });
-        });
-    }
-
-    function showCardSources(movie, sources) {
-        if (!sources.length) {
-            lampa.Noty.show('Для этой карточки нет доступных источников');
-            return;
+            } else readResponse(item.url,8000,function (r) {
+                var lines = r.responseText.split(/\r?\n/);
+                lines.forEach(function (line,i) {
+                    var size = /^#EXT-X-STREAM-INF:.*\bRESOLUTION=(\d+)x(\d+)/.exec(line);
+                    if (size && lines[i+1]) add(+size[1],+size[2],new URL(lines[i+1],r.responseURL || item.url).href);
+                });
+            },display);
         }
-        function show() { showPicker(cardTitle(movie), rows, 'content'); }
-        var rows = sources.map(function (source) {
-            return {
-                title: source.title,
-                subtitle: source.subtitle,
-                action: function () { source.action(show); }
-            };
-        });
-        show();
-    }
-
-    function alternativeSources(movie, done) {
-        var year = Number(String(movie.release_date || '').slice(0, 4));
-        var lookups = [];
-        if (isAnimation(movie)) lookups.push(function (next) { aniLibertySource(movie, next); });
-        if (!isSeries(movie) && year > 0) lookups.push(function (next) { archiveSource(movie, year, next); });
-        var results = [];
-        if (!lookups.length) {
-            done(results);
-            return;
-        }
-        var first = results.length;
-        var pending = lookups.length;
-        lampa.Noty.show('Ищем доступные источники…');
-        lookups.forEach(function (lookup, index) {
-            lookup(function (result) {
-                results[first + index] = result;
-                if (--pending === 0) done(results.filter(Boolean));
+        function rowsFor(data) {
+            return ((data && Array.isArray(data.data)) ? data.data : []).filter(function (item) {
+                return item && (item.method === 'play' ? mediaUrl(item.url) : apiUrl(item.url));
+            }).map(function (item) {
+                var label = item.translate || item.name || item.title || title;
+                return {title:label,subtitle:[names[key],item.year].filter(Boolean).join(' · '),action:function () {
+                    if (item.method === 'play') { qualities(item,label,item.vast); return; }
+                    read(apiUrl(item.url),function (child) {
+                        if (child && child.method === 'play') { qualities(child,label,item.vast); return; }
+                        var rows = rowsFor(child);
+                        if (rows.length) showPicker(names[key],rows,'content'); else unavailable();
+                    });
+                }};
             });
+        }
+        var params = Object.keys(query).filter(function (k) { return query[k] || query[k] === 0; })
+            .map(function (k) { return k+'='+encodeURIComponent(query[k]); });
+        read(base+'?'+params.join('&'),function (data) {
+            var rows = rowsFor(data);
+            done(rows.length ? {title:names[key],rows:rows} : null);
         });
     }
 
@@ -1129,8 +606,7 @@
         api.addParam({
             component: 'open4k',
             param: { name: 'open4k_default_source', type: 'select', default: 'auto', values: {
-                auto: 'Автоматически', veo:'VeoVeo · Русские озвучки', hubru:'HdHub · Full HD и 4K на русском', hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
-                archive: 'Internet Archive', catalog: 'Подборка 4K'
+                auto:'Автоматически', collaps:'Collaps', lordfilm:'LordFilm', hdvb:'HDVB'
             } },
             field: { name: 'Источник по умолчанию', description: 'Открывается при входе в карточку просмотра.' }
         });
@@ -1138,19 +614,15 @@
 
     function MovieScreen(options) {
         var self = this, $ = window.$, movie = options.movie || {};
-        var names = { veo:'VeoVeo · Русские озвучки', hubru:'HdHub · Full HD и 4K на русском', hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
         var title = cardTitle(movie), original = movie.original_title || movie.original_name || '';
         var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
-        var film = findFilm(movie);
-        var query = title, serial = 0, alive = true, last, loaded = {};
+        var query = title, serial = 0, alive = true, last;
         var pref = lampa.Storage.get('open4k_default_source', 'auto');
-        var order = film ? ['catalog','collaps'] : isAnimation(movie) ? ['anime','collaps'] : ['collaps'];
-        if (lampa.Torrent && lampa.Torserver && lampa.Torserver.url && lampa.Torserver.url()) order.unshift('rutor','kinozal');
-        order.unshift('veo','hubru');
-        if (pref === 'vix') { pref = 'auto'; lampa.Storage.set('open4k_default_source', pref); }
-        order.push('broadcast');
-        if (!isSeries(movie) && year) order.push('archive');
-        if (!Object.prototype.hasOwnProperty.call(names, pref)) pref = 'auto';
+        var order = ['collaps','lordfilm','hdvb'];
+        if (pref !== 'auto' && !Object.prototype.hasOwnProperty.call(names,pref)) {
+            pref = 'collaps';
+            lampa.Storage.set('open4k_default_source',pref);
+        }
         var source = pref === 'auto' ? order[0] : pref;
         var root = $('<div class="o4-view"></div>');
         var side = $('<aside class="o4-info"></aside>').appendTo(root);
@@ -1194,10 +666,10 @@
             function apply(value) {
                 value = String(value || '').trim();
                 if (!value) return;
-                if ((source === 'collaps' || source === 'hub' || source === 'veo' || source === 'hubru') && value !== title && lampa.Search) {
+                if (value !== title && lampa.Search) {
                     lampa.Search.open({input:value}); return;
                 }
-                query = value; loaded = {}; load(false);
+                query = value; load(false);
             }
             drawer('Уточнить поиск', choices, function (row) {
                 if (row.global) lampa.Search.open({input:query});
@@ -1226,14 +698,7 @@
                 tag(copy,'o4-detail',[row.subtitle, movie.runtime ? movie.runtime + ' мин' : ''].filter(Boolean).join(' · '));
             });
             if (!rows.length) {
-                var empty = source === 'hubru' ? 'HdHub не подтвердил файл Full HD или 4K с русской дорожкой.' :
-                    source === 'veo' ? 'VeoVeo не вернул вариант с русской озвучкой в Full HD или 4K.' :
-                    'У источника нет видео для этой карточки. Выберите другой источник.';
-                tag(list,'o4-empty',empty);
-                if (source === 'veo' || source === 'hubru') {
-                    var other = source === 'veo' ? 'hubru' : 'veo';
-                    control(list,'o4-chip','Проверить ' + names[other],function () { source = other; load(false); });
-                }
+                tag(list,'o4-empty','У источника нет доступного видео для этой карточки.');
             }
             focus();
         }
@@ -1257,44 +722,14 @@
             list.empty(); tag(list,'o4-empty','Поиск видео…');
             function done(found) {
                 if (!alive || id !== serial) return;
-                loaded[key] = found || null;
                 var rows = rowsFor(found);
                 if (!rows.length && auto && order.indexOf(key) < order.length - 1) {
                     source = order[order.indexOf(key) + 1]; load(true);
                 } else draw(rows);
             }
-            if (key !== 'hub' && key !== 'hubru' && key !== 'veo' && Object.prototype.hasOwnProperty.call(loaded,key)) { done(loaded[key]); return; }
-            var search = $.extend({},movie);
-            if (query !== title) {
-                search.title = search.name = query;
-                search.original_title = search.original_name = query;
-            }
-            if (key === 'catalog') {
-                var match = findFilm(search);
-                done(match && {title:names[key],rows:match.streams.map(function (stream) {
-                    return {title:stream.title,subtitle:stream.subtitle,action:function () { play(match.title,stream.url); }};
-                })});
-            } else if (key === 'veo') veoSource(movie,done);
-            else if (key === 'hub' || key === 'hubru') hubSource(movie,done,key === 'hubru');
-            else if (key === 'rutor' || key === 'kinozal') trackerSource(search,key,done);
-            else if (key === 'broadcast') broadcasterSource(search,done);
-            else if (key === 'archive') {
-                if (isSeries(movie) || !year) done(null); else archiveSource(search,Number(year),done);
-            } else if (key === 'anime') aniLibertySource(search,done);
-            else {
-                var ids = collapsIds(movie);
-                var tmdb = lampa.Api && lampa.Api.sources && lampa.Api.sources.tmdb;
-                function resolve(ids) {
-                    if (alive && id === serial) collapsSource(movie,ids,done);
-                }
-                function fallback() { indexedIds(movie,resolve); }
-                if (!ids.length && movie.source === 'tmdb' && tmdb && tmdb.external_ids) {
-                    tmdb.external_ids({id:movie.id,type:isSeries(movie)?'tv':'movie'},function (external) {
-                        var externalIds = collapsIds(external || {});
-                        if (externalIds.length) resolve(externalIds); else fallback();
-                    },fallback);
-                } else if (ids.length) resolve(ids); else fallback();
-            }
+            if (key === 'collaps') {
+                resolveMovieIds(movie,function (ids) { if (alive && id === serial) collapsSource(movie,ids,done); });
+            } else onlineSource(key,movie,done,function () { return alive && id === serial; });
         }
         this.create = function () {
             if (!$('#open4k-layout').length) $('<style id="open4k-layout"></style>').text(
@@ -1320,70 +755,26 @@
             return;
         }
         var request = ++cardRequest;
-        var film = findFilm(movie);
-        if (film && film.credit !== 'Internet Archive') {
-            showFilm(film, "content");
-            return;
-        }
-
-        var activity = lampa.Activity && typeof lampa.Activity.active === 'function' ? lampa.Activity : null;
-        var current = activity && activity.active();
-        var cachedAlternatives;
-        function isCurrent() {
-            return request === cardRequest && (!activity || activity.active() === current || (activity.active() || {}).component === "open4k_sources");
-        }
-        function getAlternatives(done) {
-            if (cachedAlternatives) done(cachedAlternatives);
-            else alternativeSources(movie, function (sources) {
-                cachedAlternatives = sources;
-                done(sources);
-            });
-        }
-        function preferred(source) {
-            var canSearchAlternatives = isAnimation(movie) || (!isSeries(movie) && movie.release_date);
-            source.action(null, canSearchAlternatives ? function () { alternatives(source); } : null);
-        }
-        function alternatives(primary) {
-            getAlternatives(function (sources) {
-                if (!isCurrent()) return;
-                if (primary && !sources.length) {
-                    preferred(primary);
-                    lampa.Noty.show('Для этой карточки нет других источников');
-                } else showCardSources(movie, primary ? sources.concat(primary) : sources);
-            });
-        }
-        function findOnline(ids) {
-            if (!isCurrent()) return;
-            if (ids.length) lampa.Noty.show('Ищем доступные источники…');
-            collapsSource(movie, ids, function (source) {
-                if (!isCurrent()) return;
-                if (source) {
-                    preferred(source);
-                } else {
-                    alternatives(null);
-                }
-            });
-        }
-
-        if (isAnimation(movie)) {
-            getAlternatives(function (sources) {
-                if (!isCurrent()) return;
-                if (sources.some(function (source) { return source.title === 'AniLiberty'; })) {
-                    collapsSource(movie, collapsIds(movie), function (online) {
-                        if (isCurrent()) showCardSources(movie, online ? sources.concat(online) : sources);
+        function current() { return request === cardRequest; }
+        resolveMovieIds(movie,function (ids) {
+            collapsSource(movie,ids,function (found) {
+                if (!current()) return;
+                function alternatives() {
+                    var rows = ['lordfilm','hdvb'].map(function (key) {
+                        return {title:names[key],action:function () {
+                            onlineSource(key,movie,function (result) {
+                                if (result) showPicker(names[key],result.rows,'content');
+                                else lampa.Noty.show('Для этой карточки нет доступных источников');
+                            },current);
+                        }};
                     });
-                } else findOnline(collapsIds(movie));
+                    showPicker(cardTitle(movie),rows,'content');
+                }
+                if (found) found.action(null,isSeries(movie) ? null : alternatives);
+                else if (movie.release_date) alternatives();
+                else lampa.Noty.show('Для этой карточки нет доступных источников');
             });
-            return;
-        }
-        var ids = collapsIds(movie);
-        var tmdb = lampa.Api && lampa.Api.sources && lampa.Api.sources.tmdb;
-        if (!ids.length && movie.source === 'tmdb' && /^[1-9][0-9]*$/.test(movie.id) &&
-            tmdb && typeof tmdb.external_ids === 'function') {
-            tmdb.external_ids({ type: isSeries(movie) ? 'tv' : 'movie', id: movie.id }, function (external) {
-                findOnline(collapsIds(external || {}));
-            }, function () { findOnline([]); });
-        } else findOnline(ids);
+        });
     }
 
     function upgradeOpenMovie() {
