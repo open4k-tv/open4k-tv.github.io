@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('1eb160f6edfd8c9c1a5d53b87696465212c723fa813d293c481aad066842206a'));
+}('77f75912d48dad6b0f1d2b8b82cf07d22f6c8be165839cb8d754a2cd36398528'));
 
 (function () {
     'use strict';
@@ -488,7 +488,7 @@
             }
         }
         walk(0,bytes.length,null,0);
-        if (video.width >= 3840 || video.height >= 2160) return {video:video, audio:audio};
+        if (video.width >= 1920 || video.height >= 1080) return {video:video, audio:audio};
     }
 
     function probeUhd(url, done) {
@@ -513,7 +513,8 @@
         },function (data) {
             var urls = {}, rows = [];
             var files = (data && Array.isArray(data.streams) ? data.streams : []).filter(function (file) {
-                if (!file || !(/\s(?:2160p|4k)\b/i.test(file.name) || /\b2160p\b/i.test(file.description))) return false;
+                var quality = russianOnly ? /\b(?:1080p|2160p|4k)\b/i : /\b(?:2160p|4k)\b/i;
+                if (!file || !quality.test(file.name + ' ' + file.description)) return false;
                 if (!/^https:\/\/(?:[a-z0-9-]+\.r2\.cloudflarestorage\.com|pixeldrain\.(?:com|dev)|(?:gpdl|pixel)\.hubcloud\.mov|video-downloads\.googleusercontent\.com)\//i.test(file.url)) return false;
                 if (urls[file.url] || (file.behaviorHints && file.behaviorHints.proxyHeaders)) return false;
                 urls[file.url] = true; return true;
@@ -524,7 +525,7 @@
                 if (cursor >= files.length) return;
                 var file = files[cursor++];
                 probeUhd(file.url,function (meta) {
-                    if (meta && (!russianOnly || meta.audio.some(function (lang) { return /^(ru|rus)(-|$)/i.test(lang); }))) {
+                    if (meta && (russianOnly ? meta.audio.some(function (lang) { return /^(ru|rus)(-|$)/i.test(lang); }) : meta.video.width >= 3840 || meta.video.height >= 2160)) {
                         var v = meta.video, provider = String(file.name).split(' ')[0];
                         var label = [provider,v.width + '×' + v.height,meta.audio.filter(function (lang,i,all) { return all.indexOf(lang) === i; }).join(' / ')].filter(Boolean).join(' · ');
                         var size = Number((file.behaviorHints || {}).videoSize);
@@ -543,51 +544,77 @@
         });
     }
 
+    function lookupCardTitle(movie, done) {
+        var year = String(movie.release_date || movie.first_air_date || movie.year || '').slice(0,4);
+        var titles = [movie.original_title || movie.original_name,cardTitle(movie)], seen = {};
+        function next() {
+            if (!titles.length || !/^\d{4}$/.test(year)) { done(null); return; }
+            var title = String(titles.shift() || '').toLowerCase().replace(/ё/g,'е').replace(/[^a-z0-9а-я]+/g,' ').trim();
+            var key = year + '/' + title, hash = 0;
+            if (!title || seen[key]) { next(); return; }
+            seen[key] = true;
+            for (var i = 0; i < key.length; i++) hash = (31 * hash + key.charCodeAt(i)) % 128;
+            readJson('https://open4k-tv.github.io/veo/title-' + hash + '.json',function (bucket) {
+                if (bucket && Array.isArray(bucket[key])) done(bucket[key]); else next();
+            });
+        }
+        next();
+    }
+
     function veoSource(movie, done) {
+        function byTitle() {
+            lookupCardTitle(movie,function (entry) { if (entry) episodes(entry[0]); else done(null); });
+        }
         function lookup(ids) {
             var keys = ids.map(function (id) { return id.replace('imdb/','').replace('kp/','kp'); });
             function next() {
-                if (!keys.length) { done(null); return; }
+                if (!keys.length) { byTitle(); return; }
                 var key = keys.shift(), shard = Number(key.slice(2)) % 64;
                 readJson('https://open4k-tv.github.io/veo/' + shard + '.json', function (index) {
                     if (!index || !Number(index[key])) { next(); return; }
-                    readJson('https://api.rstprgapipt.com/balancer-api/proxy/playlists/catalog-api/episodes?content-id=' + Number(index[key]), function (items) {
-                        if (!Array.isArray(items) || !items.length) { done(null); return; }
-                        if (!isSeries(movie)) {
-                            var film = items.filter(function (item) { return item.season && Number(item.season.order) === 0; })[0];
-                            if (film) veoVoices(cardTitle(movie),film,done); else done(null);
-                            return;
-                        }
-                        var seasons = {};
-                        items.forEach(function (item) {
-                            var season = item.season && Number(item.season.order);
-                            if (!(season > 0 && item.order > 0 && Array.isArray(item.episodeVariants))) return;
-                            if (!seasons[season]) seasons[season] = [];
-                            seasons[season].push(item);
-                        });
-                        var rows = Object.keys(seasons).map(function (season) {
-                            return {title:'Сезон ' + season, subtitle:'Русские дорожки · HLS', action:function () {
-                                var episodes = seasons[season].sort(function (a,b) { return a.order-b.order; }).map(function (ep) {
-                                    return {title:'Серия ' + ep.order,action:function () {
-                                        var active = lampa.Activity.active();
-                                        veoVoices(cardTitle(movie) + ' · ' + season + '×' + ep.order,ep,function (found) {
-                                            if (lampa.Activity.active() !== active) return;
-                                            if (found) showPicker('Озвучка',found.rows,'content');
-                                            else lampa.Noty.show('Русская дорожка в Full HD или 4K не найдена');
-                                        });
-                                    }};
-                                });
-                                showPicker('Сезон ' + season,episodes,'content');
-                            }};
-                        });
-                        done(rows.length ? {title:'VeoVeo',rows:rows} : null);
-                    });
+                    episodes(Number(index[key]));
                 });
             }
             next();
         }
+        function episodes(contentId) {
+            readJson('https://api.rstprgapipt.com/balancer-api/proxy/playlists/catalog-api/episodes?content-id=' + contentId, function (items) {
+                if (!Array.isArray(items) || !items.length) { done(null); return; }
+                if (!isSeries(movie)) {
+                    var film = items.filter(function (item) { return item.season && Number(item.season.order) === 0; })[0];
+                    if (film) veoVoices(cardTitle(movie),film,done); else done(null);
+                    return;
+                }
+                var seasons = {};
+                items.forEach(function (item) {
+                    var season = item.season && Number(item.season.order);
+                    if (!(season > 0 && item.order > 0 && Array.isArray(item.episodeVariants))) return;
+                    if (!seasons[season]) seasons[season] = [];
+                    seasons[season].push(item);
+                });
+                var rows = Object.keys(seasons).map(function (season) {
+                    return {title:'Сезон ' + season, subtitle:'Русские дорожки · HLS', action:function () {
+                        var episodes = seasons[season].sort(function (a,b) { return a.order-b.order; }).map(function (ep) {
+                            return {title:'Серия ' + ep.order,action:function () {
+                                var active = lampa.Activity.active();
+                                veoVoices(cardTitle(movie) + ' · ' + season + '×' + ep.order,ep,function (found) {
+                                    if (lampa.Activity.active() !== active) return;
+                                    if (found) showPicker('Озвучка',found.rows,'content');
+                                    else lampa.Noty.show('Русская дорожка в Full HD или 4K не найдена');
+                                });
+                            }};
+                        });
+                        showPicker('Сезон ' + season,episodes,'content');
+                    }};
+                });
+                done(rows.length ? {title:'VeoVeo',rows:rows} : null);
+            });
+        }
         var known = collapsIds(movie);
-        if (known.length) lookup(known); else resolveMovieIds(movie,lookup);
+        if (known.length) lookup(known);
+        else lookupCardTitle(movie,function (entry) {
+            if (entry) episodes(entry[0]); else resolveMovieIds(movie,lookup);
+        });
     }
 
     function veoVoices(title,item,done) {
@@ -655,7 +682,10 @@
             });
             done(rows.length ? {title:'HdHub / 4KHDHub',rows:rows} : null);
         }
-        resolveMovieIds(movie,resolve);
+        resolveMovieIds(movie,function (ids) {
+            if (ids.some(function (id) { return id.indexOf('imdb/') === 0; })) resolve(ids);
+            else lookupCardTitle(movie,function (entry) { resolve(entry ? collapsIds({imdb_id:entry[1]}) : []); });
+        });
     }
 
     function resolveMovieIds(movie, resolve) {
@@ -1099,7 +1129,7 @@
         api.addParam({
             component: 'open4k',
             param: { name: 'open4k_default_source', type: 'select', default: 'auto', values: {
-                auto: 'Автоматически', veo:'VeoVeo · Русские озвучки', hubru:'HdHub · 4K с русским звуком', hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
+                auto: 'Автоматически', veo:'VeoVeo · Русские озвучки', hubru:'HdHub · Full HD и 4K на русском', hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
                 archive: 'Internet Archive', catalog: 'Подборка 4K'
             } },
             field: { name: 'Источник по умолчанию', description: 'Открывается при входе в карточку просмотра.' }
@@ -1108,7 +1138,7 @@
 
     function MovieScreen(options) {
         var self = this, $ = window.$, movie = options.movie || {};
-        var names = { veo:'VeoVeo · Русские озвучки', hubru:'HdHub · 4K с русским звуком', hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
+        var names = { veo:'VeoVeo · Русские озвучки', hubru:'HdHub · Full HD и 4K на русском', hub:'HdHub / 4KHDHub', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
         var title = cardTitle(movie), original = movie.original_title || movie.original_name || '';
         var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
         var film = findFilm(movie);
@@ -1116,8 +1146,7 @@
         var pref = lampa.Storage.get('open4k_default_source', 'auto');
         var order = film ? ['catalog','collaps'] : isAnimation(movie) ? ['anime','collaps'] : ['collaps'];
         if (lampa.Torrent && lampa.Torserver && lampa.Torserver.url && lampa.Torserver.url()) order.unshift('rutor','kinozal');
-        if (isSeries(movie)) order.unshift('veo','hubru');
-        else order.unshift('hubru','veo');
+        order.unshift('veo','hubru');
         if (pref === 'vix') { pref = 'auto'; lampa.Storage.set('open4k_default_source', pref); }
         order.push('broadcast');
         if (!isSeries(movie) && year) order.push('archive');
@@ -1196,7 +1225,16 @@
                 tag(copy,'o4-label',row.title);
                 tag(copy,'o4-detail',[row.subtitle, movie.runtime ? movie.runtime + ' мин' : ''].filter(Boolean).join(' · '));
             });
-            if (!rows.length) tag(list,'o4-empty','У источника нет видео для этой карточки. Выберите другой источник.');
+            if (!rows.length) {
+                var empty = source === 'hubru' ? 'HdHub не подтвердил файл Full HD или 4K с русской дорожкой.' :
+                    source === 'veo' ? 'VeoVeo не вернул вариант с русской озвучкой в Full HD или 4K.' :
+                    'У источника нет видео для этой карточки. Выберите другой источник.';
+                tag(list,'o4-empty',empty);
+                if (source === 'veo' || source === 'hubru') {
+                    var other = source === 'veo' ? 'hubru' : 'veo';
+                    control(list,'o4-chip','Проверить ' + names[other],function () { source = other; load(false); });
+                }
+            }
             focus();
         }
         function rowsFor(found) {
