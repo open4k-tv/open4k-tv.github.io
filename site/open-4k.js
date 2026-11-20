@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('67fcc244c44609326009d783064495874ed94cfc6265d572b5d2aa62fc11bfe3'));
+}('ff6e9a4ed26d1496ee8ff46998c62c76e85fa69badf8d4e92445f4531c7b8ce4'));
 
 (function () {
     'use strict';
@@ -445,6 +445,43 @@
         readResponse(url, 4500, function (request) {
             return JSON.parse(request.responseText);
         }, done);
+    }
+
+    function trackerSource(movie, tracker, done) {
+        var labels = {rutor:'RuTor', kinozal:'Кинозал'};
+        var original = movie.original_title || movie.original_name;
+        var queries = [original, cardTitle(movie)].filter(function (value, index, all) {
+            return value && all.indexOf(value) === index;
+        });
+        var titles = queries.map(normalizeTitle);
+        var year = Number(String(movie.release_date || movie.first_air_date || '').slice(0,4));
+        function search() {
+            if (!queries.length || !lampa.Torrent || !lampa.Torrent.start) { done(null); return; }
+            readJson('https://jacred.su/api/v1.0/torrents?search=' + encodeURIComponent(queries.shift()), function (items) {
+                var seen = {};
+                var releases = (Array.isArray(items) ? items : []).filter(function (item) {
+                    if (!item || item.tracker !== tracker || !item.title) return false;
+                    if (titles.indexOf(normalizeTitle(item.name)) < 0 && titles.indexOf(normalizeTitle(item.originalname)) < 0) return false;
+                    if (!isSeries(movie) && year && Number(item.relased) !== year) return false;
+                    if (!(Number(item.quality) >= 2160 || /\b(2160p?|4k|uhd)\b/i.test(item.title))) return false;
+                    var hash = /^magnet:\?xt=urn:btih:([a-f\d]{40}|[a-z2-7]{32})(?:&|$)/i.exec(item.magnet);
+                    if (!hash || seen[hash[1].toLowerCase()]) return false;
+                    seen[hash[1].toLowerCase()] = true;
+                    return true;
+                }).sort(function (a,b) { return (Number(b.sid) || 0) - (Number(a.sid) || 0); });
+                if (!releases.length) { search(); return; }
+                done({title:labels[tracker], rows:releases.map(function (item) {
+                    return {title:item.title, subtitle:[labels[tracker],item.sizeName,'Раздают: ' + (Number(item.sid) || 0)].filter(Boolean).join(' · '),
+                        action:function () {
+                            if (!lampa.Torserver || !lampa.Torserver.url || !lampa.Torserver.url()) {
+                                lampa.Noty.show('Для просмотра раздач укажите TorrServer в настройках Lampa'); return;
+                            }
+                            lampa.Torrent.start({Title:item.title,title:item.title,MagnetUri:item.magnet,Size:Number(item.size)},movie);
+                        }};
+                })});
+            });
+        }
+        search();
     }
 
     function collapsIds(movie) {
@@ -839,7 +876,7 @@
         api.addParam({
             component: 'open4k',
             param: { name: 'open4k_default_source', type: 'select', default: 'auto', values: {
-                auto: 'Автоматически', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
+                auto: 'Автоматически', rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty',
                 archive: 'Internet Archive', catalog: 'Подборка 4K'
             } },
             field: { name: 'Источник по умолчанию', description: 'Открывается при входе в карточку просмотра.' }
@@ -848,13 +885,14 @@
 
     function MovieScreen(options) {
         var self = this, $ = window.$, movie = options.movie || {};
-        var names = { broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
+        var names = { rutor:'RuTor', kinozal:'Кинозал', broadcast: 'MediathekView', collaps: 'Collaps', anime: 'AniLiberty', archive: 'Internet Archive', catalog: 'Подборка 4K' };
         var title = cardTitle(movie), original = movie.original_title || movie.original_name || '';
         var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
         var film = findFilm(movie);
         var query = title, serial = 0, alive = true, last, loaded = {};
         var pref = lampa.Storage.get('open4k_default_source', 'auto');
         var order = film ? ['catalog','collaps'] : isAnimation(movie) ? ['anime','collaps'] : ['collaps'];
+        if (lampa.Torrent && lampa.Torserver && lampa.Torserver.url && lampa.Torserver.url()) order.unshift('rutor','kinozal');
         if (pref === 'vix') { pref = 'auto'; lampa.Storage.set('open4k_default_source', pref); }
         order.push('broadcast');
         if (!isSeries(movie) && year) order.push('archive');
@@ -973,7 +1011,8 @@
                 done(match && {title:names[key],rows:match.streams.map(function (stream) {
                     return {title:stream.title,subtitle:stream.subtitle,action:function () { play(match.title,stream.url); }};
                 })});
-            } else if (key === 'broadcast') broadcasterSource(search,done);
+            } else if (key === 'rutor' || key === 'kinozal') trackerSource(search,key,done);
+            else if (key === 'broadcast') broadcasterSource(search,done);
             else if (key === 'archive') {
                 if (isSeries(movie) || !year) done(null); else archiveSource(search,Number(year),done);
             } else if (key === 'anime') aniLibertySource(search,done);
