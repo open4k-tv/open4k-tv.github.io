@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('49783a5569ff7efcd9d7647ca9d11f0fda274f6d87b90563f0e92201773d6841'));
+}('26715b9f6ae52fc81555c5977d4fc5bd8bbd303ca229142bf35e7e774983df0e'));
 
 (function () {
     'use strict';
@@ -294,7 +294,7 @@
     }
 
     function isSeries(movie) {
-        return movie.media_type === 'tv' || !!(movie.first_air_date || movie.number_of_seasons);
+        return movie.media_type === 'tv' || !!(movie.first_air_date || movie.number_of_seasons || (movie.seasons || []).length);
     }
 
     function resolveMovieIds(movie, resolve) {
@@ -950,7 +950,7 @@
                                 update();
                                 next();
                             },screenOpen || current);
-                        },function () { found.more = null; });
+                        },function () { found.more = null; update(); });
                     };
                     cb(found);
             }
@@ -977,7 +977,7 @@
                 return item && (item.method === 'play' ? mediaUrl(item.url) : apiUrl(item.url));
             }).map(function (item) {
                 var label = item.translate || item.name || item.title || title;
-                return {title:label,subtitle:[sourceName,qualityLabel(ratings[item.url]),item.year].filter(Boolean).join(' · '),action:function () {
+                return {id:item.url,title:label,tier:ratings[item.url],subtitle:[sourceName,qualityLabel(ratings[item.url]),item.year].filter(Boolean).join(' · '),action:function () {
                     if (playable(item)) {
                         var index = choices.map(function (c) { return c.item; }).indexOf(item);
                         playVoices(choices,index); return;
@@ -1124,7 +1124,7 @@
                     preferred = row.key; source = row.key; displayed = false;
                     ++seasonRevision; seasonButton.hide();
                     sourceButton.text('Источник · '+sources[row.key]); list.empty();
-                    tag(list,'o4-empty','Проверяем доступность видео…');
+                    showLoading();
                 } else lampa.Noty.show('Источник недоступен для этой карточки');
             });
         });
@@ -1177,11 +1177,16 @@
         tag(side,'o4-summary',movie.overview || '');
         function remember(label) { lampa.Storage.set(historyKey, label); }
         function draw(rows,notice) {
+            var selectedUrl = last && $.contains(list[0],last) ? $(last).data('o4-url') : null;
             list.empty();
             var recent = lampa.Storage.get(historyKey,'');
             tag(list,'o4-history',recent ? 'Последний выбор · ' + recent : 'Нет истории просмотра');
             rows.forEach(function (row) {
                 var item = control(list,'o4-row','',function () { row.action(); });
+                if (row.id) {
+                    item.data('o4-url',row.id);
+                    if (row.id === selectedUrl) last = item[0];
+                }
                 if (still) $('<img alt="">').attr('src',still).appendTo(item);
                 var copy = $('<div class="o4-copy"></div>').appendTo(item);
                 tag(copy,'o4-label',row.title);
@@ -1194,9 +1199,14 @@
         }
         function rowsFor(found) {
             if (!found) return [];
-            if (!found.media) return found.rows.map(function (row) {
-                return {title:row.title,subtitle:row.subtitle,action:function () { remember(found.title + ' · ' + row.title); row.action(); }};
-            });
+            if (!found.media) {
+                var visible = found.rows;
+                if (!isSeries(movie)) visible = visible.filter(function (row) { return row.tier; })
+                    .sort(function (a,b) { return b.tier-a.tier; });
+                return visible.map(function (row) {
+                    return {id:row.id,title:row.title,subtitle:row.subtitle,action:function () { remember(found.title + ' · ' + row.title); row.action(); }};
+                });
+            }
             var media = found.media;
             if (!media.url) return collapsRows(movie, media, function () { draw(rowsFor(found)); });
             var voices = media.audio && media.audio.names || [];
@@ -1207,6 +1217,14 @@
         }
         var verified = Object.create(null), checked = Object.create(null), queue = [], workers = 0;
         var preferred = source, displayed = false;
+        function showLoading() {
+            list.empty();
+            if (isSeries(movie)) tag(list,'o4-empty','Проверяем доступность видео…');
+            else tag(list,'o4-film-loading','Загружаем фильм… Проверяем качество озвучек.').attr('role','status');
+        }
+        function waitingForQuality(found) {
+            return !isSeries(movie) && found.more && found.quality() < 2160;
+        }
         function pending() { return workers || queue.length; }
         function displaySource(key) {
             source = key;
@@ -1240,13 +1258,14 @@
                 draw(rows,found && found.notice);
             }
             var found = verified[key];
-            done(found);
+            if (waitingForQuality(found)) showLoading();
+            else done(found);
         }
         function enrichSource(key,found) {
             function update() {
                 if (!alive) return;
                 if (!minutes && found.minutes && found.minutes()) { minutes = found.minutes(); renderMovieMeta(); }
-                if (!found.more) return;
+                if (!found.rows || isSeries(movie)) return;
                 if (!found.rows.length) {
                     delete verified[key];
                     if (source === key) { displayed = false; pump(); }
@@ -1254,9 +1273,9 @@
                 }
                 if (source !== key || !displayed) return;
                 sourceButton.text('Источник · '+withQuality(sources[key],found.quality()));
-                var rows = rowsFor(found), items = list.find('.o4-row');
-                if (items.length !== rows.length) draw(rows);
-                else items.each(function (i) { $(this).find('.o4-detail').text(rows[i].subtitle); });
+                if (waitingForQuality(found)) return;
+                var rows = rowsFor(found);
+                if (list.find('.o4-row').length !== rows.length) draw(rows);
             }
             if (found.more) found.more(update);
             else update();
@@ -1284,12 +1303,15 @@
             },true,function () { return alive; });
         }
         this.create = function () {
+            if (!$('#open4k-film-loader').length) $('<style id="open4k-film-loader"></style>').text(
+                '.o4-film-loading{display:flex;align-items:center;padding:1.2em 0}.o4-film-loading:before{content:"";width:1em;height:1em;margin-right:.75em;border:.14em solid rgba(255,255,255,.3);border-top-color:currentColor;border-radius:50%;animation:o4-spin .9s linear infinite}@keyframes o4-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.o4-film-loading:before{animation:none}}'
+            ).appendTo('head');
             if (!$('#open4k-layout').length) $('<style id="open4k-layout"></style>').text(
                 '.o4-view{display:flex;height:100%;padding:1.4em;box-sizing:border-box;gap:2em}.o4-info{width:26%;flex-shrink:0;overflow:hidden}.o4-poster{width:42%;border-radius:.5em}.o4-meta,.o4-detail,.o4-genres{opacity:.76;font-size:.88em}.o4-meta{margin:1em 0}.o4-name{font-size:1.85em;font-weight:700;line-height:1.1;margin:.5em 0}.o4-summary{margin-top:1.4em;line-height:1.45;opacity:.88}.o4-main{flex:1;min-width:0;display:flex;flex-direction:column}.o4-tools{display:flex;flex-wrap:wrap;gap:.65em;padding:.25em}.o4-chip,.o4-row{background:rgba(18,22,24,.76);border-radius:.5em;cursor:pointer}.o4-chip{padding:.8em 1em}.o4-list{overflow-y:auto;flex:1;padding:.3em}.o4-history,.o4-empty{padding:1em 0;opacity:.8}.o4-row{display:flex;align-items:center;min-height:4.7em;margin:.6em 0;overflow:hidden}.o4-row img{width:8em;height:4.7em;object-fit:cover}.o4-copy{padding:.65em 1em}.o4-label{font-size:1.24em}.o4-detail{margin-top:.35em}.o4-view .focus{outline:3px solid currentColor;outline-offset:-3px}'
             ).appendTo('head');
             this.activity.loader(false); this.activity.toggle();
             sourceButton.text('Источник · '+sources[preferred]); queryButton.text('Поиск · '+query);
-            tag(list,'o4-empty','Проверяем доступность видео…');
+            showLoading();
             queue = [preferred].concat(order.filter(function (key) { return key !== preferred; }));
             pump();
             return root;
