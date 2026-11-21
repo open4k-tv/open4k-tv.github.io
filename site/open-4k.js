@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('034f99b59a375ef5aa8713519192d110a62870ef2ab011709bcc9e810eb7aad6'));
+}('279671b675630ef0a953bfd2b2cf5f88902bcb1e74e7105c89c4d636ff76e9d6'));
 
 (function () {
     'use strict';
@@ -340,15 +340,6 @@
         }
         for (var i=0;i<Math.min(2,items.length);i++) worker();
     }
-    function checkToMaximum(items,check,maximum,current,done) {
-        var available = false;
-        anyAvailable(items,function (item,next) {
-            check(item,function (ok) {
-                available = available || !!ok;
-                next(available && maximum() >= 2160);
-            });
-        },function () { done(available); },current);
-    }
     function collapsPlayback(title, media, url, quality) {
         var video = { title: title, url: url, launch_player: 'lampa' };
         if (quality) video.quality = quality;
@@ -569,22 +560,6 @@
         return '?' + Object.keys(query).filter(function (k) { return query[k] || query[k] === 0; })
             .map(function (k) { return k+'='+encodeURIComponent(query[k]); }).join('&');
     }
-    function discoverSources(movie,done) {
-        readResponse('https://z01.online/lite/events'+queryString(catalogQuery(movie)),8000,function (r) {
-            return JSON.parse(r.responseText);
-        },function (events) {
-            var result = Object.create(null);
-            (Array.isArray(events) ? events : []).forEach(function (e) {
-                if (!e || typeof e.name !== 'string' || typeof e.url !== 'string') return;
-                var match = /^https:\/\/z01\.online\/lite\/([a-z0-9_-]+)$/.exec(e.url);
-                var key = match && match[1];
-                if (/^https?:\/\/wtch\.ch\/lite\/fxapi$/.test(e.url)) key = 'fxapi';
-                if (!key || key in Object.prototype || key === 'auto') return;
-                result[key] = e.name.split(/\s+(?:~|-)\s+/)[0].replace(/[<>&]/g,'').slice(0,60);
-            });
-            done(result);
-        });
-    }
     function anyAvailable(items,check,done,current) {
         var index = 0;
         function next(ok) {
@@ -652,8 +627,8 @@
             else done(false);
         });
     }
-    function onlineSource(key,movie,done,current,navigate,sourceName,verify) {
-        var base = key === 'fxapi' ? 'https://wtch.ch/lite/fxapi' : 'https://z01.online/lite/' + key;
+    function onlineSource(key,movie,done,current,navigate,sourceName,verify,quick) {
+        var base = 'https://z01.online/lite/' + key;
         var title = cardTitle(movie), query = catalogQuery(movie);
         sourceName = sourceName || names[key] || key;
         var ratings = Object.create(null), peak = 0;
@@ -663,15 +638,12 @@
             });
         }
         function apiUrl(url) {
-            if (key === 'fxapi' && typeof url === 'string') url = url.replace(/^http:\/\/wtch\.ch\//,'https://wtch.ch/');
             if (typeof url !== 'string' || url.indexOf(base) !== 0 || !/^[/?]/.test(url.slice(base.length))) return '';
             return url.replace(/([?&])rjson=[^&]*(&|$)/,'$1') + (url.indexOf('?') < 0 ? '?' : '&') + 'rjson=true';
         }
         function mediaUrl(url) {
             if (typeof url !== 'string') return false;
-            return /^https:\/\/z01\.online\/proxy\/[^\s<>"]+$/.test(url) ||
-                (key === 'veoveo' && /^https:\/\/api\.rstprgapipt\.com\/content-router[/?][^\s<>"]+$/.test(url)) ||
-                (key === 'fxapi' && /^https:\/\/(?:[a-z0-9-]+\.)*werkecdn\.me\/[^\s<>"]+/.test(url));
+            return /^https:\/\/z01\.online\/proxy\/[^\s<>"]+$/.test(url);
         }
         function unavailable() { lampa.Noty.show('Источник не вернул доступное видео'); }
         function qualities(item,label,vast,valid,ready,failed,limit) {
@@ -712,8 +684,7 @@
                     var size = /^#EXT-X-STREAM-INF:.*\bRESOLUTION=(\d+)x(\d+)/.exec(line);
                     if (size && lines[i+1]) {
                         var variant = new URL(lines[i+1],r.responseURL || item.url).href;
-                        if (/^https:\/\//.test(variant)) add(+size[1],+size[2],
-                            hlsUrl(multiAudio && key === 'veoveo' ? item.url : variant),variant);
+                        if (/^https:\/\//.test(variant)) add(+size[1],+size[2],hlsUrl(variant),variant);
                     }
                 });
             },display);
@@ -745,7 +716,7 @@
             if (item.method === 'play') check(item);
             else read(apiUrl(item.url),check);
         }
-        function playVoices(choices,initial,caption) {
+        function playVoices(choices,initial,caption,enrichTracks) {
             var active = initial, revision = 0, work;
             function mark(index) {
                 (work && work.voiceovers || []).forEach(function (track,i) { track.selected = track.enabled = i === index; });
@@ -768,6 +739,17 @@
                             });
                             work = video;
                             lampa.Player.play(video);
+                            if (enrichTracks && choices.length > 1) {
+                                checkAll(choices.filter(function (v) { return !ratings[v.item.url]; }),function (v,next) {
+                                    checkItem(v.item,next);
+                                },function () {
+                                    if (!current() || !lampa.Player.playdata || lampa.Player.playdata() !== work) return;
+                                    work.voiceovers.forEach(function (track,i) {
+                                        track.name = withQuality(String(choices[i].label).replace(/[<>]/g,''),ratings[choices[i].item.url]);
+                                    });
+                                    if (lampa.PlayerPanel && lampa.PlayerPanel.setTracks) lampa.PlayerPanel.setTracks(work.voiceovers);
+                                });
+                            }
                             return;
                         }
                         var size = Object.keys(work.quality || {}).filter(function (k) { return work.quality[k] === work.url; })[0];
@@ -784,7 +766,7 @@
             }
             select(initial);
         }
-        function episodeRows(page,complete) {
+        function episodeRows(page,complete,stillHere) {
             var groups = {}, voices = (page.voice || []).filter(function (v) { return apiUrl(v.url); });
             function collect(data,label,rank) {
                 (data && data.data || []).forEach(function (ep) {
@@ -798,6 +780,7 @@
             var selected = voices.filter(function (v) { return v.active; })[0];
             collect(page,selected && selected.name,0);
             var pending = voices.filter(function (v) { return !v.active; }), remaining = pending.length, next = 0;
+            var onLoaded;
             function finish() {
                 complete(Object.keys(groups).map(function (id) { return groups[id]; }).sort(function (a,b) {
                     return a.season-b.season || a.episode-b.episode;
@@ -806,10 +789,18 @@
                     g.voices.sort(function (a,b) { return a.rank-b.rank; });
                     return {title:'Серия '+g.episode,subtitle:'S'+g.season+':E'+g.episode+' · '+sourceName,
                         action:function () {
-                            checkAll(g.voices,function (voice,next) { checkItem(voice.item,next); },function () {
-                                var ready = g.voices.filter(function (v) { return ratings[v.item.url]; });
-                                if (ready.length) playVoices(ready,0,caption); else unavailable();
-                            });
+                            function launch() {
+                                if (!current() || (stillHere && !stillHere())) return;
+                                var first = 0;
+                                anyAvailable(g.voices,function (voice,next) {
+                                    checkItem(voice.item,function (ok) { if (!ok) first++; next(ok); });
+                                },function (ok) {
+                                    if (stillHere && !stillHere()) return;
+                                    if (ok) playVoices(g.voices,first,caption,true); else unavailable();
+                                },current);
+                            }
+                            if (remaining) onLoaded = launch;
+                            else launch();
                         }};
                 }));
             }
@@ -818,11 +809,14 @@
                 var i = next++, v = pending[i];
                 read(apiUrl(v.url),function (data) {
                     collect(data,v.name,i+1);
-                    if (!--remaining) finish(); else worker();
+                    if (!--remaining) { finish(); if (onLoaded) onLoaded(); } else worker();
                 });
             }
             if (!remaining) finish();
-            else for (var i=0;i<Math.min(3,pending.length);i++) worker();
+            else {
+                if (stillHere && Object.keys(groups).length) finish();
+                for (var i=0;i<Math.min(3,pending.length);i++) worker();
+            }
         }
         function resultFor(data,cb) {
             if (verify && data && data.type === 'similar') {
@@ -842,16 +836,21 @@
             }
             if (data && (isSeries(movie) && data.type === 'movie' || !isSeries(movie) && /^(season|episode)$/.test(data.type))) { cb(null); return; }
             if (data && data.type === 'season' && Array.isArray(data.data)) {
+                var seasonPages = Object.create(null);
                 var seasons = data.data.filter(function (s) { return apiUrl(s.url); }).map(function (s) {
-                    return {label:labelOf(s),load:function (loaded) {
-                        read(apiUrl(s.url),function (page) { episodeRows(page || {},loaded); });
+                    return {label:labelOf(s),load:function (loaded,stillHere) {
+                        if (seasonPages[s.url]) { episodeRows(seasonPages[s.url],loaded,stillHere); return; }
+                        read(apiUrl(s.url),function (page) { episodeRows(page || {},loaded,stillHere); });
                     }};
                 });
                 if (seasons.length) {
                     if (!verify) { cb({title:sourceName,seasons:seasons}); return; }
-                    checkToMaximum(data.data.filter(function (s) { return apiUrl(s.url); }),function (s,next) {
-                        read(apiUrl(s.url),function (page) { checkEpisodes(page,next); });
-                    },function () { return peak; },current,function (ok) { cb(ok ? {title:sourceName,seasons:seasons,quality:function () { return peak; }} : null); });
+                    anyAvailable(data.data.filter(function (s) { return apiUrl(s.url); }),function (s,next) {
+                        read(apiUrl(s.url),function (page) {
+                            if (page) seasonPages[s.url] = page;
+                            checkEpisodes(page,next);
+                        });
+                    },function (ok) { cb(ok ? {title:sourceName,seasons:seasons,quality:function () { return peak; }} : null); },current);
                     return;
                 }
             }
@@ -866,24 +865,38 @@
                 var rows = rowsFor(data);
                 cb(rows.length ? {title:sourceName,rows:rows,quality:function () { return peak; }} : null);
             }
-            if (verify) checkAll((data && data.data || []).filter(playable),checkItem,finishMovie);
+            var candidates = (data && data.data || []).filter(playable);
+            if (verify && quick) {
+                anyAvailable(candidates,checkItem,function (ok) {
+                    if (!ok) { cb(null); return; }
+                    var found = {title:sourceName,rows:rowsFor(data),quality:function () { return peak; }};
+                    found.more = function (update) {
+                        checkAll(candidates.filter(function (item) { return !ratings[item.url]; }),checkItem,function () {
+                            found.rows = rowsFor(data);
+                            found.more = null;
+                            update();
+                        });
+                    };
+                    cb(found);
+                },current);
+            }
+            else if (verify) checkAll(candidates,checkItem,finishMovie);
             else finishMovie();
         }
         function checkEpisodes(page,next) {
-            function maximum() { return peak; }
             function checkPage(data,cb) {
-                checkToMaximum((data && data.data || []).filter(playable),checkItem,maximum,current,cb);
+                anyAvailable((data && data.data || []).filter(playable),checkItem,cb,current);
             }
             checkPage(page,function (ok) {
-                if (ok && peak >= 2160) { next(true); return; }
-                checkToMaximum((page && page.voice || []).filter(function (v) { return !v.active && apiUrl(v.url); }),function (v,cb) {
+                if (ok) { next(true); return; }
+                anyAvailable((page && page.voice || []).filter(function (v) { return !v.active && apiUrl(v.url); }),function (v,cb) {
                     read(apiUrl(v.url),function (other) { checkPage(other,cb); });
-                },maximum,current,function (more) { next(ok || more); });
+                },next,current);
             });
         }
         function rowsFor(data) {
             var choices = (data && data.data || []).filter(function (item) {
-                return playable(item) && (!verify || ratings[item.url]);
+                return playable(item) && (quick || !verify || ratings[item.url]);
             }).map(function (item) { return {item:item,label:labelOf(item)}; });
             return ((data && Array.isArray(data.data)) ? data.data : []).filter(function (item) {
                 if (verify) return item && !!ratings[item.url];
@@ -935,18 +948,16 @@
         } else api.addComponent({ component: 'open4k', name: menuTitle, icon: icon });
         api.addParam({
             component: 'open4k',
-            param: { name: 'open4k_default_source', type: 'select', default: 'auto', values: {
-                auto:'Автоматически', collaps:'Collaps', lordfilm:'LordFilm', hdvb:'HDVB', cdnvideohub:'VideoHUB'
-            } },
+            param: { name: 'open4k_default_source', type: 'select', default: 'cdnvideohub', values: names },
             field: { name: 'Источник по умолчанию', description: 'Открывается при входе в карточку просмотра.' }
         });
     }
 
-    function availableSource(key,movie,label,current,done) {
+    function availableSource(key,movie,label,current,done,quick) {
         if (key !== 'collaps') {
             onlineSource(key,movie,function (found) {
                 done(found && (found.seasons || found.rows && found.rows.length) ? found : null);
-            },current,null,label,true);
+            },current,null,label,true,quick);
             return;
         }
         resolveMovieIds(movie,function (ids) {
@@ -957,7 +968,7 @@
                 var media = found.media;
                 var entries = media.url ? [media] : [].concat.apply([],media.seasons.map(function (s) { return s.episodes; }));
                 found.quality = function () { return media.maxQuality; };
-                checkToMaximum(entries,function (entry,next) {
+                anyAvailable(entries,function (entry,next) {
                     checkPlaylist(entry.url || entry.hls,function (ok,tier) {
                         if (!ok) { next(false); return; }
                         entry.maxQuality = tier || entry.maxQuality;
@@ -966,9 +977,7 @@
                             next(true);
                         });
                     },current);
-                },found.quality,current,function (ok) {
-                    done(ok ? found : null);
-                });
+                },function (ok) { done(ok ? found : null); },current);
             });
         });
     }
@@ -978,14 +987,14 @@
         var title = cardTitle(movie), original = movie.original_title || movie.original_name || '';
         var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
         var query = title, alive = true, last;
-        var pref = lampa.Storage.get('open4k_default_source', 'auto');
-        var sources = Object.assign(Object.create(null),names);
+        var pref = lampa.Storage.get('open4k_default_source', 'cdnvideohub');
+        var sources = names;
         var order = ['cdnvideohub','collaps','lordfilm','hdvb'];
-        if (pref !== 'auto' && !Object.prototype.hasOwnProperty.call(names,pref)) {
-            pref = 'collaps';
+        if (!Object.prototype.hasOwnProperty.call(names,pref)) {
+            pref = 'cdnvideohub';
             lampa.Storage.set('open4k_default_source',pref);
         }
-        var source = pref === 'auto' ? order[0] : pref;
+        var source = pref;
         var root = $('<div class="o4-view"></div>');
         var side = $('<aside class="o4-info"></aside>').appendTo(root);
         var main = $('<section class="o4-main"></section>').appendTo(root);
@@ -1005,7 +1014,7 @@
                 .on('hover:focus', function () { last = this; this.scrollIntoView({block:'nearest'}); });
         }
         function focus() {
-            if (!alive || lampa.Activity.active().activity !== self.activity) return;
+            if (!alive || lampa.Activity.active().activity !== self.activity || lampa.Player.opened && lampa.Player.opened()) return;
             lampa.Controller.collectionSet(root);
             lampa.Controller.collectionFocus(last && $.contains(root[0],last) ? last : sourceButton[0], root);
         }
@@ -1015,11 +1024,19 @@
             }, onBack:function () { lampa.Controller.toggle('content'); }});
         }
         var sourceButton = control(tools, 'o4-chip', '', function () {
-            var keys = Object.keys(sources).filter(function (key) { return verified[key]; });
+            var keys = order.filter(function (key) { return verified[key] || (!checked[key] && (key === preferred || key === 'cdnvideohub')); });
             if (!keys.length) { lampa.Noty.show(pending() ? 'Проверяем доступность видео…' : 'Нет доступного видео'); return; }
             drawer('Источник', keys.map(function (key) {
-                return { title:withQuality(sources[key],verified[key].quality()), key:key, selected:key === source };
-            }), function (row) { displaySource(row.key); });
+                return { title:verified[key] ? withQuality(sources[key],verified[key].quality()) : sources[key]+' · Проверка…', key:key, selected:key === source };
+            }), function (row) {
+                if (verified[row.key]) displaySource(row.key);
+                else if (!checked[row.key]) {
+                    preferred = row.key; source = row.key; displayed = false;
+                    ++seasonRevision; seasonButton.hide();
+                    sourceButton.text('Источник · '+sources[row.key]); list.empty();
+                    tag(list,'o4-empty','Проверяем доступность видео…');
+                } else lampa.Noty.show('Источник недоступен для этой карточки');
+            });
         });
         var seasons = [], selectedSeason, seasonRevision = 0;
         var seasonButton = control(tools,'o4-chip','Сезон',function () {
@@ -1031,7 +1048,8 @@
             selectedSeason = season;
             seasonButton.text(season.label).show();
             list.empty(); tag(list,'o4-empty','Загрузка серий…');
-            season.load(function (rows) { if (alive && ticket === seasonRevision) draw(rows); });
+            function stillHere() { return alive && ticket === seasonRevision; }
+            season.load(function (rows) { if (stillHere()) draw(rows); },stillHere);
         }
         var queryButton = control(tools, 'o4-chip', '', function () {
             var choices = [{ title:'Указать название', edit:true }];
@@ -1091,9 +1109,9 @@
                     action:function () { choosePlayback(title,media,media.url,index,function () { remember('Collaps · ' + name); }); }};
             });
         }
-        var verified = Object.create(null), checked = Object.create(null), queue = [], workers = 0, discovering = true;
+        var verified = Object.create(null), checked = Object.create(null), queue = [], workers = 0;
         var preferred = source, displayed = false;
-        function pending() { return workers || queue.length || discovering; }
+        function pending() { return workers || queue.length; }
         function displaySource(key) {
             source = key;
             displayed = true;
@@ -1125,11 +1143,15 @@
                 var rows = rowsFor(found);
                 draw(rows,found && found.notice);
             }
-            done(verified[key]);
+            var found = verified[key];
+            done(found);
+            if (found.more) found.more(function () {
+                if (alive && source === key) { sourceButton.text('Источник · '+withQuality(sources[key],found.quality())); draw(rowsFor(found)); }
+            });
         }
         function pump() {
             if (!alive) return;
-            while (workers < 3 && queue.length) startCheck(queue.shift());
+            while (workers < 4 && queue.length) startCheck(queue.shift());
             if (!displayed && checked[preferred]) {
                 var key = verified[preferred] ? preferred : Object.keys(verified)[0];
                 if (key) displaySource(key);
@@ -1146,24 +1168,17 @@
                 checked[key] = true;
                 if (found) verified[key] = found;
                 workers--; pump();
-            });
+            },true);
         }
         this.create = function () {
             if (!$('#open4k-layout').length) $('<style id="open4k-layout"></style>').text(
                 '.o4-view{display:flex;height:100%;padding:1.4em;box-sizing:border-box;gap:2em}.o4-info{width:26%;flex-shrink:0;overflow:hidden}.o4-poster{width:42%;border-radius:.5em}.o4-meta,.o4-detail,.o4-genres{opacity:.76;font-size:.88em}.o4-meta{margin:1em 0}.o4-name{font-size:1.85em;font-weight:700;line-height:1.1;margin:.5em 0}.o4-summary{margin-top:1.4em;line-height:1.45;opacity:.88}.o4-main{flex:1;min-width:0;display:flex;flex-direction:column}.o4-tools{display:flex;flex-wrap:wrap;gap:.65em;padding:.25em}.o4-chip,.o4-row{background:rgba(18,22,24,.76);border-radius:.5em;cursor:pointer}.o4-chip{padding:.8em 1em}.o4-list{overflow-y:auto;flex:1;padding:.3em}.o4-history,.o4-empty{padding:1em 0;opacity:.8}.o4-row{display:flex;align-items:center;min-height:4.7em;margin:.6em 0;overflow:hidden}.o4-row img{width:8em;height:4.7em;object-fit:cover}.o4-copy{padding:.65em 1em}.o4-label{font-size:1.24em}.o4-detail{margin-top:.35em}.o4-view .focus{outline:3px solid currentColor;outline-offset:-3px}'
             ).appendTo('head');
             this.activity.loader(false); this.activity.toggle();
-            sourceButton.text('Источник'); queryButton.text('Поиск · '+query);
+            sourceButton.text('Источник · '+sources[preferred]); queryButton.text('Поиск · '+query);
             tag(list,'o4-empty','Проверяем доступность видео…');
             queue = [preferred].concat(order.filter(function (key) { return key !== preferred; }));
             pump();
-            discoverSources(movie,function (extra) {
-                if (!alive) return;
-                Object.keys(extra).forEach(function (key) {
-                    if (!sources[key]) { sources[key] = extra[key]; queue.push(key); }
-                });
-                discovering = false; pump();
-            });
             return root;
         };
         this.start = function () {
@@ -1231,16 +1246,15 @@
         if (!cardTitle(movie) || event.body.find('.open4k-card-button').length) return;
 
         var buttons = event.body.find('.buttons--container').first();
-        if (!buttons.length) buttons = event.body.find('.full-start__buttons').first();
+        if (!buttons.length) buttons = event.body.find('.full-start-new__buttons, .full-start__buttons').first();
         if (!buttons.length) return;
 
         window.$('<div class="full-start__button selector open4k-card-button">' + icon + '<span>' +
-            menuTitle + '</span></div>')
+            'Смотреть · ' + menuTitle + '</span></div>')
             .on('hover:enter', function () {
-                if (pagesHost && pagesHost.openCard) pagesHost.openCard(movie);
-                else (pagesHost ? pagesHost.runtime.openCard : openCard)(movie);
+                (pagesHost ? pagesHost.runtime.openCard : openCard)(movie);
             })
-            .appendTo(buttons);
+            .prependTo(buttons);
     }
 
     function init() {
