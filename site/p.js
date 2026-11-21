@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('eee2a021746f3e8e744f175627ada8baa311e83a305373c97b3ce471ce887171'));
+}('fc9f43204a2c2f5307c004d9bab277999482fd4a2071b22b2ecb8075ba1f0693'));
 
 (function () {
     'use strict';
@@ -116,7 +116,7 @@
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
         'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>';
-    var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB'};
+    var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB'};
 
     var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
 
@@ -698,7 +698,22 @@
         }
         var params = Object.keys(query).filter(function (k) { return query[k] || query[k] === 0; })
             .map(function (k) { return k+'='+encodeURIComponent(query[k]); });
-        read(base+'?'+params.join('&'),function (data) {
+        var search = '?' + params.join('&');
+        read(base+search,function (data) {
+            if (key === 'cdnvideohub' && !query.kinopoisk_id && query.year && !(data && data.data && data.data.length)) {
+                read('https://z01.online/lite/hdvb'+search,function (catalog) {
+                    var matches = (catalog && catalog.type === 'similar' && catalog.data || []).filter(function (row) {
+                        return row && String(row.year) === query.year && [title,movie.original_title,movie.original_name].some(function (name) {
+                            return name && String(row.title).trim().toLowerCase() === name.trim().toLowerCase();
+                        }) && /^https:\/\/z01\.online\/lite\/hdvb\?/.test(row.url);
+                    });
+                    if (matches.length !== 1) { done(null); return; }
+                    var kp = /[?&]kinopoisk_id=([1-9]\d{0,9})(?:&|$)/.exec(matches[0].url);
+                    if (!kp) { done(null); return; }
+                    read(base+search+'&kinopoisk_id='+kp[1],function (found) { resultFor(found,done); });
+                });
+                return;
+            }
             resultFor(data,done);
         });
     }
@@ -713,7 +728,7 @@
         api.addParam({
             component: 'open4k',
             param: { name: 'open4k_default_source', type: 'select', default: 'auto', values: {
-                auto:'Автоматически', collaps:'Collaps', lordfilm:'LordFilm', hdvb:'HDVB'
+                auto:'Автоматически', collaps:'Collaps', lordfilm:'LordFilm', hdvb:'HDVB', cdnvideohub:'VideoHUB'
             } },
             field: { name: 'Источник по умолчанию', description: 'Открывается при входе в карточку просмотра.' }
         });
@@ -725,7 +740,7 @@
         var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
         var query = title, serial = 0, alive = true, last;
         var pref = lampa.Storage.get('open4k_default_source', 'auto');
-        var order = ['collaps','lordfilm','hdvb'];
+        var order = Object.keys(names);
         if (pref !== 'auto' && !Object.prototype.hasOwnProperty.call(names,pref)) {
             pref = 'collaps';
             lampa.Storage.set('open4k_default_source',pref);
@@ -892,7 +907,7 @@
             collapsSource(movie,ids,function (found) {
                 if (!current()) return;
                 function alternatives() {
-                    var rows = ['lordfilm','hdvb'].map(function (key) {
+                    var rows = Object.keys(names).filter(function (key) { return key !== 'collaps'; }).map(function (key) {
                         return {title:names[key],action:function () {
                             onlineSource(key,movie,function (result) {
                                 if (result) showPicker(names[key],result.rows,'content');
