@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('341fb3816f43e5923ccb345bd0b4c36bb856739f2f0b6aeece674f7862fab6c9'));
+}('eee2a021746f3e8e744f175627ada8baa311e83a305373c97b3ce471ce887171'));
 
 (function () {
     'use strict';
@@ -659,6 +659,7 @@
             else for (var i=0;i<Math.min(3,pending.length);i++) worker();
         }
         function resultFor(data,cb) {
+            if (isSeries(movie) && data && data.type === 'movie') { cb(null); return; }
             if (data && data.type === 'season' && Array.isArray(data.data)) {
                 var seasons = data.data.filter(function (s) { return apiUrl(s.url); }).map(function (s) {
                     return {label:labelOf(s),load:function (loaded) {
@@ -688,6 +689,7 @@
                         resultFor(child,function (found) {
                             if (found && navigate) navigate(found);
                             else if (found && found.rows) showPicker(names[key],found.rows,'content');
+                            else if (isSeries(movie)) lampa.Noty.show('Источник не вернул серии для этой карточки');
                             else unavailable();
                         });
                     });
