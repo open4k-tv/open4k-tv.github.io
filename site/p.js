@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('452f3daaf20338bc40ee3cc5d2485a058755d1b33269a591ca61396eda1b6a2b'));
+}('341fb3816f43e5923ccb345bd0b4c36bb856739f2f0b6aeece674f7862fab6c9'));
 
 (function () {
     'use strict';
@@ -367,7 +367,7 @@
                 } };
             });
             if (voices[voiceIndex]) voices[voiceIndex].action();
-            else showPicker('Озвучка · ' + title, voices, 'content');
+            else collapsPlayback(title, media, url, quality);
         }
         if (!validDash) { launch(hls); return; }
         readResponse(dash, 4000, function (req) {
@@ -527,7 +527,7 @@
         xhr.send();
     }
 
-    function onlineSource(key,movie,done,current) {
+    function onlineSource(key,movie,done,current,navigate) {
         var base = 'https://z01.online/lite/' + key, title = cardTitle(movie);
         var query = {id:movie.tmdb_id || movie.id, title:title, original_title:movie.original_title || movie.original_name,
             year:String(movie.release_date || movie.first_air_date || '').slice(0,4), serial:isSeries(movie)?1:0,
@@ -543,23 +543,24 @@
         }
         function mediaUrl(url) { return typeof url === 'string' && /^https:\/\/z01\.online\/proxy\/[^\s<>"]+$/.test(url); }
         function unavailable() { lampa.Noty.show('Источник не вернул доступный вариант Full HD или 4K'); }
-        function qualities(item,label,vast) {
+        function qualities(item,label,vast,valid,ready) {
+            if (!valid()) return;
             if (!item || item.method !== 'play' || !mediaUrl(item.url)) { unavailable(); return; }
-            var variants = [];
+            var variants = [], multiAudio = false;
             function add(w,h,url) {
                 if (w && h && mediaUrl(url)) variants.push({w:w,h:h,url:url});
             }
             function display() {
-                if (!current()) return;
+                if (!valid()) return;
                 variants.sort(function (a,b) { return b.w-a.w || b.h-a.h; });
                 var best = variants[0];
-                if (!best || (best.w < 1920 && best.h < 1080)) { unavailable(); return; }
+                if (!best || (!isSeries(movie) && best.w < 1920 && best.h < 1080)) { unavailable(); return; }
                 var quality = {};
                 variants.forEach(function (v) {
                     var size = v.w+'×'+v.h;
                     if (!quality[size]) quality[size] = v.url;
                 });
-                lampa.Player.play({title:title+' · '+label,url:best.url,quality:quality,launch_player:'lampa',vast:item.vast || vast});
+                ready({title:title+' · '+label,url:multiAudio ? item.url : best.url,quality:multiAudio ? undefined : quality,launch_player:'lampa',vast:item.vast || vast});
             }
             var files = Object.keys(item.quality || {}).filter(function (k) {
                 return /^\d{3,4}p$/.test(k) && mediaUrl(item.quality[k]);
@@ -571,6 +572,7 @@
                     mp4Size(url,function (s) { if (s) add(s.w,s.h,url); if (!--remaining) display(); });
                 });
             } else readResponse(item.url,8000,function (r) {
+                multiAudio = /#EXT-X-MEDIA:.*TYPE=AUDIO/.test(r.responseText);
                 var lines = r.responseText.split(/\r?\n/);
                 lines.forEach(function (line,i) {
                     var size = /^#EXT-X-STREAM-INF:.*\bRESOLUTION=(\d+)x(\d+)/.exec(line);
@@ -578,17 +580,116 @@
                 });
             },display);
         }
+        function playable(item) {
+            return item && (item.method === 'play' ? mediaUrl(item.url) : item.method === 'call' && apiUrl(item.url));
+        }
+        function labelOf(item) { return item.translate || item.name || item.title || title; }
+        function playVoices(choices,initial,caption) {
+            var active = initial, revision = 0, work;
+            function mark(index) {
+                (work && work.voiceovers || []).forEach(function (track,i) { track.selected = track.enabled = i === index; });
+            }
+            function select(index) {
+                var ticket = ++revision, choice = choices[index];
+                if (work) {
+                    mark(active);
+                    if (index === active) return;
+                }
+                function valid() {
+                    return current() && ticket === revision && (!work || (lampa.Player.opened() && lampa.Player.playdata() === work));
+                }
+                function resolve(item) {
+                    qualities(item,caption || choice.label,choice.item.vast,valid,function (video) {
+                        if (!work) {
+                            if (choices.length > 1) video.voiceovers = choices.map(function (v,i) {
+                                return {name:String(v.label).replace(/[<>]/g,''),ignore_translate:true,selected:i === initial,
+                                    onSelect:function () { select(i); }};
+                            });
+                            work = video;
+                            lampa.Player.play(video);
+                            return;
+                        }
+                        var size = Object.keys(work.quality || {}).filter(function (k) { return work.quality[k] === work.url; })[0];
+                        var url = video.quality && video.quality[size] || video.url;
+                        work.quality = video.quality;
+                        lampa.PlayerPanel.quality(video.quality || {},url);
+                        active = index;
+                        mark(active);
+                        lampa.PlayerPanel.listener.send('quality',{url:url,name:video.quality && video.quality[size] ? size : ''});
+                    });
+                }
+                if (choice.item.method === 'play') resolve(choice.item);
+                else read(apiUrl(choice.item.url),resolve);
+            }
+            select(initial);
+        }
+        function episodeRows(page,complete) {
+            var groups = {}, voices = (page.voice || []).filter(function (v) { return apiUrl(v.url); });
+            function collect(data,label,rank) {
+                (data && data.data || []).forEach(function (ep) {
+                    if (!playable(ep) || !/^\d+$/.test(ep.s) || !/^\d+$/.test(ep.e)) return;
+                    var id = ep.s+'x'+ep.e;
+                    var group = groups[id] || (groups[id] = {season:+ep.s,episode:+ep.e,voices:[]});
+                    if (!group.voices.some(function (v) { return v.item.url === ep.url; }))
+                        group.voices.push({item:ep,label:label || ep.translate || 'Основная',rank:rank});
+                });
+            }
+            var selected = voices.filter(function (v) { return v.active; })[0];
+            collect(page,selected && selected.name,0);
+            var pending = voices.filter(function (v) { return !v.active; }), remaining = pending.length, next = 0;
+            function finish() {
+                complete(Object.keys(groups).map(function (id) { return groups[id]; }).sort(function (a,b) {
+                    return a.season-b.season || a.episode-b.episode;
+                }).map(function (g) {
+                    var caption = 'Сезон '+g.season+' · Серия '+g.episode;
+                    g.voices.sort(function (a,b) { return a.rank-b.rank; });
+                    return {title:'Серия '+g.episode,subtitle:'S'+g.season+':E'+g.episode+' · '+names[key],
+                        action:function () { playVoices(g.voices,0,caption); }};
+                }));
+            }
+            function worker() {
+                if (next >= pending.length) return;
+                var i = next++, v = pending[i];
+                read(apiUrl(v.url),function (data) {
+                    collect(data,v.name,i+1);
+                    if (!--remaining) finish(); else worker();
+                });
+            }
+            if (!remaining) finish();
+            else for (var i=0;i<Math.min(3,pending.length);i++) worker();
+        }
+        function resultFor(data,cb) {
+            if (data && data.type === 'season' && Array.isArray(data.data)) {
+                var seasons = data.data.filter(function (s) { return apiUrl(s.url); }).map(function (s) {
+                    return {label:labelOf(s),load:function (loaded) {
+                        read(apiUrl(s.url),function (page) { episodeRows(page || {},loaded); });
+                    }};
+                });
+                if (seasons.length) { cb({title:names[key],seasons:seasons}); return; }
+            }
+            if (data && data.type === 'episode') {
+                episodeRows(data,function (rows) { cb({title:names[key],rows:rows}); }); return;
+            }
+            var rows = rowsFor(data);
+            cb(rows.length ? {title:names[key],rows:rows} : null);
+        }
         function rowsFor(data) {
+            var choices = (data && data.data || []).filter(playable).map(function (item) { return {item:item,label:labelOf(item)}; });
             return ((data && Array.isArray(data.data)) ? data.data : []).filter(function (item) {
                 return item && (item.method === 'play' ? mediaUrl(item.url) : apiUrl(item.url));
             }).map(function (item) {
                 var label = item.translate || item.name || item.title || title;
                 return {title:label,subtitle:[names[key],item.year].filter(Boolean).join(' · '),action:function () {
-                    if (item.method === 'play') { qualities(item,label,item.vast); return; }
+                    if (playable(item)) {
+                        var index = choices.map(function (c) { return c.item; }).indexOf(item);
+                        playVoices(choices,index); return;
+                    }
                     read(apiUrl(item.url),function (child) {
-                        if (child && child.method === 'play') { qualities(child,label,item.vast); return; }
-                        var rows = rowsFor(child);
-                        if (rows.length) showPicker(names[key],rows,'content'); else unavailable();
+                        resultFor(child,function (found) {
+                            if (found && navigate) navigate(found);
+                            else if (found && found.rows) showPicker(names[key],found.rows,'content');
+                            else unavailable();
+                        });
                     });
                 }};
             });
@@ -596,8 +697,7 @@
         var params = Object.keys(query).filter(function (k) { return query[k] || query[k] === 0; })
             .map(function (k) { return k+'='+encodeURIComponent(query[k]); });
         read(base+'?'+params.join('&'),function (data) {
-            var rows = rowsFor(data);
-            done(rows.length ? {title:names[key],rows:rows} : null);
+            resultFor(data,done);
         });
     }
 
@@ -662,6 +762,18 @@
                 return { title:names[key], key:key, selected:key === source };
             }), function (row) { source = row.key; load(false); });
         });
+        var seasons = [], selectedSeason, seasonRevision = 0;
+        var seasonButton = control(tools,'o4-chip','Сезон',function () {
+            drawer('Сезон',seasons.map(function (s) { return {title:s.label,season:s,selected:s === selectedSeason}; }),
+                function (row) { showSeason(row.season); });
+        }).hide();
+        function showSeason(season) {
+            var ticket = ++seasonRevision;
+            selectedSeason = season;
+            seasonButton.text(season.label).show();
+            list.empty(); tag(list,'o4-empty','Загрузка серий…');
+            season.load(function (rows) { if (alive && ticket === seasonRevision) draw(rows); });
+        }
         var queryButton = control(tools, 'o4-chip', '', function () {
             var choices = [{ title:'Указать название', edit:true }];
             if (lampa.Search) choices.push({ title:'Глобальный поиск', global:true });
@@ -722,11 +834,24 @@
         }
         function load(auto) {
             var id = ++serial, key = source;
+            ++seasonRevision; seasons = []; seasonButton.hide();
             sourceButton.text('Источник · ' + names[key]);
             queryButton.text('Поиск · ' + query);
             list.empty(); tag(list,'o4-empty','Поиск видео…');
             function done(found) {
                 if (!alive || id !== serial) return;
+                seasons = found && found.seasons || [];
+                if (found && found.media && found.media.seasons) seasons = found.media.seasons.map(function (s) {
+                    return {label:'Сезон '+s.number,load:function (loaded) {
+                        loaded(s.episodes.slice().sort(function (a,b) { return +a.episode - +b.episode; }).map(function (ep) {
+                            var label = 'Серия '+ep.episode, code = 'S'+s.number+':E'+ep.episode;
+                            return {title:ep.name || label,subtitle:code+' · Collaps',action:function () {
+                                choosePlayback(title+' · '+code,ep,ep.hls,undefined,function () { remember('Collaps · '+code); });
+                            }};
+                        }));
+                    }};
+                });
+                if (seasons.length) { showSeason(seasons[0]); return; }
                 var rows = rowsFor(found);
                 if (!rows.length && auto && order.indexOf(key) < order.length - 1) {
                     source = order[order.indexOf(key) + 1]; load(true);
@@ -734,7 +859,7 @@
             }
             if (key === 'collaps') {
                 resolveMovieIds(movie,function (ids) { if (alive && id === serial) collapsSource(movie,ids,done); });
-            } else onlineSource(key,movie,done,function () { return alive && id === serial; });
+            } else onlineSource(key,movie,done,function () { return alive && id === serial; },done);
         }
         this.create = function () {
             if (!$('#open4k-layout').length) $('<style id="open4k-layout"></style>').text(
