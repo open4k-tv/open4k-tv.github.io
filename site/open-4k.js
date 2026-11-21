@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('689bed5d1196688288a3061afa5c6d41466dc6f9307638b2fa58af9aa6ed6abc'));
+}('49783a5569ff7efcd9d7647ca9d11f0fda274f6d87b90563f0e92201773d6841'));
 
 (function () {
     'use strict';
@@ -489,12 +489,13 @@
                 else if (result.url) {
                     readResponse(result.url, 4000, function (request) {
                         var manifest = request.responseText;
-                        return /^\s*#EXTM3U\b/.test(manifest) ? manifest : '';
+                        return /^\s*#EXTM3U\b/.test(manifest) ? {responseText:manifest,responseURL:request.responseURL || result.url} : null;
                     }, function (manifest) {
                         if (!manifest) next();
                         else {
+                            result.masterResponse = manifest;
                             var widest = 0;
-                            manifest.replace(/\bRESOLUTION=(\d+)x(\d+)/g, function (match, width, height) {
+                            manifest.responseText.replace(/\bRESOLUTION=(\d+)x(\d+)/g, function (match, width, height) {
                                 if (Number(width) > widest) {
                                     widest = Number(width);
                                     result.resolution = width + '×' + height;
@@ -593,8 +594,8 @@
         xhr.onerror = xhr.ontimeout = function () { finish(false); };
         xhr.send();
     }
-    function checkPlaylist(url,done,current,depth) {
-        readResponse(url,6000,function (r) {
+    function checkPlaylist(url,done,current,depth,master) {
+        function parse(r) {
             var lines = r.responseText.trim().split(/\r?\n/);
             if (lines[0] !== '#EXTM3U') return null;
             var base = r.responseURL || url;
@@ -611,21 +612,34 @@
                 }
                 if (/^#EXTINF:/.test(lines[i])) {
                     var segment = lines.slice(i+1).find(function (line) { return line && line[0] !== '#'; });
-                    return segment && {segment:address(segment)};
+                    var seconds = lines.indexOf('#EXT-X-ENDLIST') >= 0 ? lines.reduce(function (sum,line) {
+                        return line.indexOf('#EXTINF:') === 0 ? sum + parseFloat(line.slice(8)) : sum;
+                    },0) : 0;
+                    return segment && {segment:address(segment),minutes:isFinite(seconds) ? Math.round(seconds/60) : 0};
                 }
             }
             return {streams:streams.sort(function (a,b) { return b.tier-a.tier; })};
-        },function (playlist) {
+        }
+        function inspect(playlist) {
             if (!current()) return;
-            if (playlist && playlist.segment) segmentAvailable(playlist.segment,done);
+            if (playlist && playlist.segment) segmentAvailable(playlist.segment,function (ok) { done(ok,0,playlist.minutes); });
             else if (playlist && playlist.streams && !depth) {
-                var tier = 0;
+                var tier = 0, minutes = 0;
                 anyAvailable(playlist.streams,function (child,next) {
-                    checkPlaylist(child.url,function (ok) { if (ok) tier = child.tier; next(ok); },current,1);
-                },function (ok) { done(ok,tier); },current);
+                    checkPlaylist(child.url,function (ok,unused,duration) {
+                        if (ok) { tier = child.tier; minutes = duration; }
+                        next(ok);
+                    },current,1);
+                },function (ok) { done(ok,tier,minutes); },current);
             }
             else done(false);
-        });
+        }
+        if (master) {
+            var parsed;
+            try { parsed = parse(master); } catch (error) { parsed = null; }
+            inspect(parsed);
+        }
+        else readResponse(url,6000,parse,inspect);
     }
     var catalogCache = new Map(), catalogPending = new Map();
     function readCatalog(url,done) {
@@ -644,11 +658,12 @@
             callbacks.forEach(function (fn) { fn(data); });
         });
     }
-    function onlineSource(key,movie,done,current,navigate,sourceName,verify,quick) {
+    var checkedMedia = new Map(), checkingMedia = new Map(), manifestCache = new Map();
+    function onlineSource(key,movie,done,current,navigate,sourceName,verify,quick,screenOpen) {
         var base = 'https://z01.online/lite/' + key;
         var title = cardTitle(movie), query = catalogQuery(movie);
         sourceName = sourceName || names[key] || key;
-        var ratings = Object.create(null), manifests = Object.create(null), peak = 0, playRequest = 0;
+        var ratings = Object.create(null), peak = 0, playRequest = 0;
         function read(url,callback) {
             readCatalog(url,function (data) {
                 if (current()) callback(data);
@@ -683,10 +698,12 @@
                 });
                 ready({title:title+' · '+label,url:audio ? hlsUrl(item.url) : best.url,quality:audio ? undefined : quality,launch_player:'lampa',vast:item.vast || vast},usable);
             }
-            var entry = manifests[item.url];
+            var manifestKey = key+'|'+item.url, entry = manifestCache.get(manifestKey);
             if (entry && entry.waiters) { entry.waiters.push(deliver); return; }
             if (entry && entry.until > Date.now()) { deliver(entry.list,entry.audio); return; }
-            entry = manifests[item.url] = {waiters:[deliver]};
+            entry = {waiters:[deliver]};
+            if (manifestCache.size >= 256) manifestCache.delete(manifestCache.keys().next().value);
+            manifestCache.set(manifestKey,entry);
             function display() {
                 variants.sort(function (a,b) { return b.w-a.w || b.h-a.h; });
                 var waiters = entry.waiters;
@@ -725,24 +742,51 @@
             return item && (item.method === 'play' ? mediaUrl(item.url) : item.method === 'call' && apiUrl(item.url));
         }
         function labelOf(item) { return item.translate || item.name || item.title || title; }
-        function checkItem(item,cb) {
+        var duration = 0;
+        function checkItem(item,cb,valid) {
+            valid = valid || current;
+            if (!valid()) return;
             if (ratings[item.url]) { cb(true); return; }
+            var id = key+'|'+item.url;
+            function receive(result) {
+                if (!valid()) return;
+                if (result) {
+                    ratings[item.url] = result.tier;
+                    peak = Math.max(peak,result.tier);
+                    if (result.minutes) duration = result.minutes;
+                }
+                cb(!!result);
+            }
+            var cached = checkedMedia.get(id);
+            if (cached && cached.until > Date.now()) { receive(cached); return; }
+            if (checkingMedia.has(id)) { checkingMedia.get(id).push(receive); return; }
+            checkingMedia.set(id,[receive]);
+            function finish(result) {
+                if (result) {
+                    result.until = Date.now()+30000;
+                    if (checkedMedia.size >= 256) checkedMedia.delete(checkedMedia.keys().next().value);
+                    checkedMedia.set(id,result);
+                }
+                var callbacks = checkingMedia.get(id);
+                checkingMedia.delete(id);
+                callbacks.forEach(function (fn) { fn(result); });
+            }
+            function pendingProbe() { return true; }
             function check(media) {
-                qualities(media,'',null,current,function (video,variants) {
-                    var tier = qualityTier(variants[0].w,variants[0].h);
+                qualities(media,'',null,pendingProbe,function (video,variants) {
+                    var tier = qualityTier(variants[0].w,variants[0].h), minutes = 0;
                     function rated(ok) {
-                        if (ok) { ratings[item.url] = tier; peak = Math.max(peak,tier); }
-                        cb(ok);
+                        finish(ok ? {tier:tier,minutes:minutes} : null);
                     }
                     if (video.url.indexOf('.m3u8') >= 0) anyAvailable(variants,function (v,next) {
                         tier = qualityTier(v.w,v.h);
-                        checkPlaylist(v.probeUrl,next,current);
-                    },rated,current);
+                        checkPlaylist(v.probeUrl,function (ok,unused,value) { minutes = value; next(ok); },pendingProbe);
+                    },rated,pendingProbe);
                     else rated(true);
-                },function () { cb(false); });
+                },function () { finish(null); });
             }
             if (item.method === 'play') check(item);
-            else read(apiUrl(item.url),check);
+            else readCatalog(apiUrl(item.url),check);
         }
         function playVoices(choices,initial,caption,enrichTracks) {
             var active = initial, revision = 0, work, request = ++playRequest;
@@ -896,15 +940,16 @@
             var candidates = (data && data.data || []).filter(playable);
             if (verify && quick) {
                     if (!candidates.length) { cb(null); return; }
-                    var found = {title:sourceName,rows:rowsFor(data),quality:function () { return peak; }};
-                    found.more = function (update) {
-                        checkAll(candidates.filter(function (item) { return ratings[item.url] == null; }),function (item,next) {
+                    var found = {title:sourceName,rows:rowsFor(data),quality:function () { return peak; },minutes:function () { return duration; }};
+                    found.more = function (update,limit) {
+                        var remaining = candidates.filter(function (item) { return ratings[item.url] == null; });
+                        checkAll(limit ? remaining.slice(0,limit) : remaining,function (item,next) {
                             checkItem(item,function (ok) {
                                 if (!ok) ratings[item.url] = 0;
                                 found.rows = rowsFor(data);
                                 update();
                                 next();
-                            });
+                            },screenOpen || current);
                         },function () { found.more = null; });
                     };
                     cb(found);
@@ -997,11 +1042,11 @@
         });
     }
 
-    function availableSource(key,movie,label,current,done,quick) {
+    function availableSource(key,movie,label,current,done,quick,screenOpen) {
         if (key !== 'collaps') {
             onlineSource(key,movie,function (found) {
                 done(found && (found.seasons || found.rows && found.rows.length) ? found : null);
-            },current,null,label,true,quick);
+            },current,null,label,true,quick,screenOpen);
             return;
         }
         resolveMovieIds(movie,function (ids) {
@@ -1013,14 +1058,15 @@
                 var entries = media.url ? [media] : [].concat.apply([],media.seasons.map(function (s) { return s.episodes; }));
                 found.quality = function () { return media.maxQuality; };
                 anyAvailable(entries,function (entry,next) {
-                    checkPlaylist(entry.url || entry.hls,function (ok,tier) {
+                    checkPlaylist(entry.url || entry.hls,function (ok,tier,minutes) {
                         if (!ok) { next(false); return; }
                         entry.maxQuality = tier || entry.maxQuality;
+                        if (media.url && minutes) found.minutes = function () { return minutes; };
                         collapsDash(entry,function () {
                             media.maxQuality = Math.max(media.maxQuality || 0,entry.maxQuality || 0);
                             next(true);
                         });
-                    },current);
+                    },current,0,entry.masterResponse);
                 },function (ok) { done(ok ? found : null); },current);
             });
         });
@@ -1118,8 +1164,14 @@
         var poster = picture(movie.poster_path,'w342');
         var still = picture(movie.backdrop_path,'w500') || poster;
         if (poster) $('<img class="o4-poster" alt="">').attr('src',poster).appendTo(side);
-        tag(side,'o4-meta',[year,(movie.production_countries || []).map(function (c) { return c.name; }).join(', '),
-            Number(movie.vote_average) > 0 ? '★ ' + Number(movie.vote_average).toFixed(1) : ''].filter(Boolean).join(' · '));
+        var minutes = Number(movie.runtime) || Number((movie.episode_run_time || [])[0]);
+        var meta = tag(side,'o4-meta','');
+        function renderMovieMeta() {
+            meta.text([year,(movie.production_countries || []).map(function (c) { return c.name; }).join(', '),
+                Number(movie.vote_average) > 0 ? '★ ' + Number(movie.vote_average).toFixed(1) : '',
+                minutes > 0 ? minutes+' мин'+(isSeries(movie) ? ' на серию' : '') : ''].filter(Boolean).join(' · '));
+        }
+        renderMovieMeta();
         tag(side,'o4-name',title);
         tag(side,'o4-genres',(movie.genres || []).map(function (g) { return g.name; }).filter(Boolean).join(' · '));
         tag(side,'o4-summary',movie.overview || '');
@@ -1133,7 +1185,7 @@
                 if (still) $('<img alt="">').attr('src',still).appendTo(item);
                 var copy = $('<div class="o4-copy"></div>').appendTo(item);
                 tag(copy,'o4-label',row.title);
-                tag(copy,'o4-detail',[row.subtitle, movie.runtime ? movie.runtime + ' мин' : ''].filter(Boolean).join(' · '));
+                tag(copy,'o4-detail',row.subtitle);
             });
             if (!rows.length) {
                 tag(list,'o4-empty',notice || 'У источника нет доступного видео для этой карточки.');
@@ -1189,16 +1241,25 @@
             }
             var found = verified[key];
             done(found);
-            if (found.more) found.more(function () {
-                if (!alive || source !== key) return;
+        }
+        function enrichSource(key,found) {
+            function update() {
+                if (!alive) return;
+                if (!minutes && found.minutes && found.minutes()) { minutes = found.minutes(); renderMovieMeta(); }
+                if (!found.more) return;
                 if (!found.rows.length) {
-                    delete verified[key]; displayed = false; pump(); return;
+                    delete verified[key];
+                    if (source === key) { displayed = false; pump(); }
+                    return;
                 }
+                if (source !== key || !displayed) return;
                 sourceButton.text('Источник · '+withQuality(sources[key],found.quality()));
                 var rows = rowsFor(found), items = list.find('.o4-row');
                 if (items.length !== rows.length) draw(rows);
-                else items.each(function (i) { $(this).find('.o4-detail').text([rows[i].subtitle,movie.runtime ? movie.runtime+' мин' : ''].filter(Boolean).join(' · ')); });
-            });
+                else items.each(function (i) { $(this).find('.o4-detail').text(rows[i].subtitle); });
+            }
+            if (found.more) found.more(update);
+            else update();
         }
         function pump() {
             if (!alive) return;
@@ -1219,7 +1280,8 @@
                 checked[key] = true;
                 if (found) verified[key] = found;
                 workers--; pump();
-            },true);
+                if (found) enrichSource(key,found);
+            },true,function () { return alive; });
         }
         this.create = function () {
             if (!$('#open4k-layout').length) $('<style id="open4k-layout"></style>').text(
@@ -1300,8 +1362,21 @@
         if (!buttons.length) buttons = event.body.find('.full-start-new__buttons, .full-start__buttons').first();
         if (!buttons.length) return;
 
+        var warmedAt = 0;
         window.$('<div class="full-start__button selector open4k-card-button">' + icon + '<span>' +
             'Смотреть · ' + menuTitle + '</span></div>')
+            .on('hover:focus', function () {
+                if (Date.now()-warmedAt < 30000) return;
+                warmedAt = Date.now();
+                var search = queryString(catalogQuery(movie));
+                var preferred = lampa.Storage && lampa.Storage.get('open4k_default_source','cdnvideohub') || 'cdnvideohub';
+                ['cdnvideohub','lordfilm','hdvb'].forEach(function (key) {
+                    if (key !== preferred) readCatalog('https://z01.online/lite/'+key+search,function () {});
+                    else onlineSource(key,movie,function (found) {
+                        if (found && found.more) found.more(function () {},2);
+                    },function () { return Date.now()-warmedAt < 30000; },null,names[key],true,true);
+                });
+            })
             .on('hover:enter', function () {
                 (pagesHost ? pagesHost.runtime.openCard : openCard)(movie);
             })
