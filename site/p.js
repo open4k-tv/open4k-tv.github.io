@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('26715b9f6ae52fc81555c5977d4fc5bd8bbd303ca229142bf35e7e774983df0e'));
+}('53584e6c9b1ffc282dd4239040869238aa7d74a7e823136395f21965c841b5a2'));
 
 (function () {
     'use strict';
@@ -173,6 +173,23 @@
         }
     }
 
+    function startContentNavigation(focus) {
+        var nav = window.Navigator;
+        function move(direction,edge) {
+            if (edge && !nav.canmove(direction)) lampa.Controller.toggle(edge);
+            else nav.move(direction);
+        }
+        lampa.Controller.add('content',{
+            toggle:focus,
+            up:function () { move('up','head'); },
+            left:function () { move('left','menu'); },
+            down:function () { move('down'); },
+            right:function () { move('right'); },
+            back:function () { lampa.Activity.backward(); }
+        });
+        lampa.Controller.toggle('content');
+    }
+
     function showPicker(title, items, controller, onBack) {
         if (controller === 'content' && lampa.Component && lampa.Activity && window.Navigator) {
             if (!window.Lampa.Component.get('open4k_sources')) {
@@ -196,16 +213,10 @@
                         return root;
                     };
                     this.start = function () {
-                        lampa.Controller.add('content', {
-                            toggle: function () {
-                                lampa.Controller.collectionSet(root);
-                                lampa.Controller.collectionFocus(last || false, root);
-                            },
-                            up: function () { window.Navigator.move('up'); },
-                            down: function () { window.Navigator.move('down'); },
-                            back: function () { lampa.Activity.backward(); }
+                        startContentNavigation(function () {
+                            lampa.Controller.collectionSet(root);
+                            lampa.Controller.collectionFocus(last || false, root);
                         });
-                        lampa.Controller.toggle('content');
                     };
                     this.render = function () { return root; };
                     this.pause = this.stop = function () {};
@@ -1195,7 +1206,7 @@
             if (!rows.length) {
                 tag(list,'o4-empty',notice || 'У источника нет доступного видео для этой карточки.');
             }
-            focus();
+            if ((lampa.Controller.enabled() || {}).name === 'content') focus();
         }
         function rowsFor(found) {
             if (!found) return [];
@@ -1317,9 +1328,7 @@
             return root;
         };
         this.start = function () {
-            var controller = { toggle:focus,back:function () { lampa.Activity.backward(); } };
-            ['up','down','left','right'].forEach(function (dir) { controller[dir] = function () { window.Navigator.move(dir); }; });
-            lampa.Controller.add('content',controller); lampa.Controller.toggle('content');
+            startContentNavigation(focus);
         };
         this.render = function () { return root; };
         this.pause = this.stop = function () {};
