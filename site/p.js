@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('d596b42a92df4a69fa01cc18d00f2ae2164ff3e6468b36b14fe0e9890d43e752'));
+}('2b7dc2e97916d4ff82a68ce8c521501a96efc69177a208138bcfc4dab62057b5'));
 
 (function () {
     'use strict';
@@ -1179,18 +1179,11 @@
             return $('<div></div>').addClass(cls).text(value).appendTo(parent);
         }
         function centerRow(row) {
-            var box = list[0], before = list.children('.o4-before')[0], after = list.children('.o4-after')[0];
-            if (!before || !after || !box.clientHeight || row.parentNode !== box) return;
-            var first = before.nextElementSibling, end = after.previousElementSibling;
-            if (first === end || box.scrollHeight-before.offsetHeight-after.offsetHeight <= box.clientHeight+1) {
-                before.style.height = after.style.height = '0px';
-                return;
-            }
-            var top = box.getBoundingClientRect().top+box.clientTop, middle = box.clientHeight/2;
-            var firstMid = first.getBoundingClientRect().top-top+box.scrollTop+first.offsetHeight/2-before.offsetHeight;
-            before.style.height = Math.max(0,Math.ceil(middle-firstMid))+'px';
-            after.style.height = Math.max(0,Math.ceil(middle-end.offsetHeight/2))+'px';
-            box.scrollTop += row.getBoundingClientRect().top-top+row.offsetHeight/2-middle;
+            var box = list[0], maxScroll = box.scrollHeight-box.clientHeight;
+            if (!box.clientHeight || maxScroll <= 0 || row.parentNode !== box || list.children('.o4-row').length < 2) return;
+            var top = box.getBoundingClientRect().top+box.clientTop;
+            var target = box.scrollTop+row.getBoundingClientRect().top-top+(row.offsetHeight-box.clientHeight)/2;
+            box.scrollTop = Math.max(0,Math.min(maxScroll,target));
         }
         function stepRow(delta) {
             if (!last || last.parentNode !== list[0] || !$(last).hasClass('o4-row')) return false;
@@ -1205,10 +1198,7 @@
                     last = this;
                     list.toggleClass('o4-row-focused',parent === list);
                     if (parent === list) centerRow(this);
-                    else {
-                        list.children('.o4-before,.o4-after').css('height',0);
-                        list[0].scrollTop = 0;
-                    }
+                    else list[0].scrollTop = 0;
                 });
         }
         function focus() {
@@ -1355,7 +1345,6 @@
             tag(list,'o4-history','');
             refreshHistory();
             var visibleSeasons = new Set();
-            if (rows.length > 1) $('<div class="o4-before" aria-hidden="true"></div>').appendTo(list);
             rows.forEach(function (row) {
                 var item = control(list,'o4-row','',function () {
                     if (row.episode != null) playSeason(rows.filter(function (r) { return r.season === row.season; }),row);
@@ -1389,7 +1378,6 @@
                 }
                 tag(copy,'o4-detail',row.subtitle);
             });
-            if (rows.length > 1) $('<div class="o4-after" aria-hidden="true"></div>').appendTo(list);
             if (previousIndex >= 0 && rows.length && last.parentNode !== list[0]) {
                 last = list.children('.o4-row')[Math.min(previousIndex,rows.length-1)];
             }
