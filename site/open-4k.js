@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('7bc0d076924355f197dde8587881bfa9d25f26c72f5a7a418c5eb27ba5a82b6c'));
+}('a47babcacd75d78ab551e4704747b7736242a9193f6af2eec865a916d6b04867'));
 
 (function () {
     'use strict';
@@ -994,7 +994,14 @@
                     }};
                 });
                 if (seasons.length) {
-                    if (!verify || quick) { cb({title:sourceName,seasons:seasons,quality:function () { return peak; }}); return; }
+                    if (!verify || quick) {
+                        var series = {title:sourceName,seasons:seasons,quality:function () { return peak; }};
+                        series.probeQuality = function (update) {
+                            var first = data.data.find(function (s) { return apiUrl(s.url); });
+                            readCatalog(apiUrl(first.url),function (page) { probeEpisodeQuality(page,update); });
+                        };
+                        cb(series); return;
+                    }
                     anyAvailable(data.data.filter(function (s) { return apiUrl(s.url); }),function (s,next) {
                         read(apiUrl(s.url),function (page) {
                             if (page) seasonPages[s.url] = page;
@@ -1006,7 +1013,8 @@
             }
             if (data && data.type === 'episode') {
                 function episodes(ok) {
-                    if (ok) episodeRows(data,function (rows) { cb({title:sourceName,rows:rows,quality:function () { return peak; }}); }); else cb(null);
+                    if (ok) episodeRows(data,function (rows) { cb({title:sourceName,rows:rows,quality:function () { return peak; },
+                        probeQuality:function (update) { probeEpisodeQuality(data,update); }}); }); else cb(null);
                 }
                 if (verify && !quick) checkEpisodes(data,episodes); else episodes(true);
                 return;
@@ -1034,6 +1042,30 @@
             }
             else if (verify) checkAll(candidates,checkItem,finishMovie);
             else finishMovie();
+        }
+        function probeEpisodeQuality(page,update) {
+            var valid = screenOpen || current;
+            if (!valid()) return;
+            var sample = (page && page.data || []).find(playable);
+            var voices = (page && page.voice || []).filter(function (v) { return !v.active && apiUrl(v.url); });
+            var seen = Object.create(null);
+            function probe(data,next) {
+                if (!valid()) return;
+                if (!sample) sample = (data && data.data || []).find(playable);
+                var item = sample && (data && data.data || []).find(function (ep) {
+                    return playable(ep) && +ep.s === +sample.s && +ep.e === +sample.e;
+                });
+                if (!item || seen[item.url]) { next(); return; }
+                seen[item.url] = true;
+                checkItem(item,function () { update(false); next(); },valid);
+            }
+            probe(page,function () {
+                checkAll(voices,function (voice,next) {
+                    if (!valid()) return;
+                    if (peak >= 2160) { next(); return; }
+                    readCatalog(apiUrl(voice.url),function (other) { probe(other,next); });
+                },function () { update(true); });
+            });
         }
         function checkEpisodes(page,next) {
             function checkPage(data,cb) {
@@ -1213,11 +1245,25 @@
                 lampa.Controller.toggle('content'); pick(row);
             }, onBack:function () { lampa.Controller.toggle('content'); }});
         }
+        var sourceLabels = Object.create(null);
+        function qualityStatus(key) {
+            var found = verified[key], tier = found && found.quality();
+            if (tier) return qualityLabel(tier)+(isSeries(movie) ? ' · по проверенной серии' : '');
+            if (!found && checked[key]) return 'Источник недоступен';
+            if (!found || found.more || found.probeQuality && !found.probeDone) return 'Проверяем качество…';
+            return 'Качество не определено';
+        }
+        function refreshSourceLabel(key) {
+            if (sourceLabels[key]) sourceLabels[key].text(qualityStatus(key));
+            if (key === source && displayed && verified[key])
+                sourceButton.text('Источник · '+withQuality(sources[key],verified[key].quality()));
+        }
         function chooseSource() {
             var keys = order.filter(function (key) { return verified[key] || !checked[key]; });
             if (!keys.length) { lampa.Noty.show(pending() ? 'Проверяем доступность видео…' : 'Нет доступного видео'); return; }
             drawer('Источник', keys.map(function (key) {
-                return { title:verified[key] ? withQuality(sources[key],verified[key].quality()) : sources[key]+' · Проверка…', key:key, selected:key === source };
+                return {title:sources[key],subtitle:qualityStatus(key),key:key,selected:key === source,
+                    onDraw:function (item) { sourceLabels[key] = item.find('.selectbox-item__subtitle'); refreshSourceLabel(key); }};
             }), function (row) {
                 if (verified[row.key]) displaySource(row.key);
                 else if (!checked[row.key]) {
@@ -1474,10 +1520,12 @@
         function enrichSource(key,found) {
             function update() {
                 if (!alive) return;
+                refreshSourceLabel(key);
                 if (!minutes && found.minutes && found.minutes()) { minutes = found.minutes(); renderMovieMeta(); }
                 if (!found.rows || isSeries(movie)) return;
                 if (!found.rows.length) {
                     delete verified[key];
+                    refreshSourceLabel(key);
                     if (source === key) { displayed = false; pump(); }
                     return;
                 }
@@ -1487,6 +1535,11 @@
                 var rows = rowsFor(found);
                 if (list.find('.o4-row').length !== rows.length) draw(rows);
             }
+            if (found.probeQuality) found.probeQuality(function (finished) {
+                if (!alive) return;
+                found.probeDone = finished;
+                refreshSourceLabel(key);
+            });
             if (found.more) found.more(update);
             else update();
         }
@@ -1508,6 +1561,7 @@
                 if (!alive) return;
                 checked[key] = true;
                 if (found) verified[key] = found;
+                refreshSourceLabel(key);
                 workers--; pump();
                 if (found) enrichSource(key,found);
             },true,function () { return alive; });
