@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('34fe75e927ea4dcd9968845c927234f02992e3b19948cd65e124c4d94fb92e18'));
+}('d596b42a92df4a69fa01cc18d00f2ae2164ff3e6468b36b14fe0e9890d43e752'));
 
 (function () {
     'use strict';
@@ -173,7 +173,7 @@
         }
     }
 
-    function startContentNavigation(focus,rightFromList) {
+    function startContentNavigation(focus,rightFromList,stepRow) {
         var nav = window.Navigator;
         function move(direction,edge) {
             if (edge && !nav.canmove(direction)) lampa.Controller.toggle(edge);
@@ -181,9 +181,9 @@
         }
         lampa.Controller.add('content',{
             toggle:focus,
-            up:function () { move('up','head'); },
+            up:function () { if (!stepRow || !stepRow(-1)) move('up','head'); },
             left:function () { move('left','menu'); },
-            down:function () { move('down'); },
+            down:function () { if (!stepRow || !stepRow(1)) move('down'); },
             right:function () { if (!rightFromList || !rightFromList()) move('right'); },
             back:function () { lampa.Activity.backward(); }
         });
@@ -1178,9 +1178,38 @@
         function tag(parent, cls, value) {
             return $('<div></div>').addClass(cls).text(value).appendTo(parent);
         }
+        function centerRow(row) {
+            var box = list[0], before = list.children('.o4-before')[0], after = list.children('.o4-after')[0];
+            if (!before || !after || !box.clientHeight || row.parentNode !== box) return;
+            var first = before.nextElementSibling, end = after.previousElementSibling;
+            if (first === end || box.scrollHeight-before.offsetHeight-after.offsetHeight <= box.clientHeight+1) {
+                before.style.height = after.style.height = '0px';
+                return;
+            }
+            var top = box.getBoundingClientRect().top+box.clientTop, middle = box.clientHeight/2;
+            var firstMid = first.getBoundingClientRect().top-top+box.scrollTop+first.offsetHeight/2-before.offsetHeight;
+            before.style.height = Math.max(0,Math.ceil(middle-firstMid))+'px';
+            after.style.height = Math.max(0,Math.ceil(middle-end.offsetHeight/2))+'px';
+            box.scrollTop += row.getBoundingClientRect().top-top+row.offsetHeight/2-middle;
+        }
+        function stepRow(delta) {
+            if (!last || last.parentNode !== list[0] || !$(last).hasClass('o4-row')) return false;
+            var sibling = delta < 0 ? last.previousElementSibling : last.nextElementSibling;
+            if (sibling && $(sibling).hasClass('o4-row')) lampa.Controller.collectionFocus(sibling,root);
+            else if (delta < 0) lampa.Controller.collectionFocus(sourceButton[0],root);
+            return true;
+        }
         function control(parent, cls, label, action) {
             return tag(parent, 'selector ' + cls, label).on('hover:enter', action)
-                .on('hover:focus', function () { last = this; this.scrollIntoView({block:'nearest'}); });
+                .on('hover:focus', function () {
+                    last = this;
+                    list.toggleClass('o4-row-focused',parent === list);
+                    if (parent === list) centerRow(this);
+                    else {
+                        list.children('.o4-before,.o4-after').css('height',0);
+                        list[0].scrollTop = 0;
+                    }
+                });
         }
         function focus() {
             if (!alive || lampa.Activity.active().activity !== self.activity || lampa.Player.opened && lampa.Player.opened()) return;
@@ -1306,6 +1335,7 @@
                     var item = $(this), row = item.data('o4-episode');
                     if (row.season === number) paintEpisode(item,row);
                 });
+                if (last && last.parentNode === list[0] && list.hasClass('o4-row-focused')) centerRow(last);
             }
             var embedded = Array.isArray(movie.seasons) && movie.seasons.find(function (season) { return season && +season.season_number === number; });
             receive(embedded);
@@ -1320,10 +1350,12 @@
         }
         function draw(rows,notice) {
             var selectedUrl = last && $.contains(list[0],last) ? $(last).data('o4-url') : null;
+            var previousIndex = selectedUrl != null ? list.children('.o4-row').index(last) : -1;
             list.empty();
             tag(list,'o4-history','');
             refreshHistory();
             var visibleSeasons = new Set();
+            if (rows.length > 1) $('<div class="o4-before" aria-hidden="true"></div>').appendTo(list);
             rows.forEach(function (row) {
                 var item = control(list,'o4-row','',function () {
                     if (row.episode != null) playSeason(rows.filter(function (r) { return r.season === row.season; }),row);
@@ -1357,6 +1389,10 @@
                 }
                 tag(copy,'o4-detail',row.subtitle);
             });
+            if (rows.length > 1) $('<div class="o4-after" aria-hidden="true"></div>').appendTo(list);
+            if (previousIndex >= 0 && rows.length && last.parentNode !== list[0]) {
+                last = list.children('.o4-row')[Math.min(previousIndex,rows.length-1)];
+            }
             visibleSeasons.forEach(loadEpisodeInfo);
             if (!rows.length) {
                 tag(list,'o4-empty',notice || 'У источника нет доступного видео для этой карточки.');
@@ -1486,6 +1522,13 @@
             },true,function () { return alive; });
         }
         this.create = function () {
+            if (!$('#open4k-list-style').length) $('<style id="open4k-list-style"></style>').text(
+                '.o4-view .o4-tools{gap:0;padding:.2em 0 .35em}.o4-tools .o4-chip{margin:.2em .55em .2em 0}'+
+                '.o4-view .o4-list{min-height:0;overflow-anchor:none}.o4-list .o4-row{min-height:5.6em;margin:.65em 0}'+
+                '.o4-list .o4-row>img{height:5.6em;width:9.95em}.o4-list .o4-episode{min-height:7.1em}'+
+                '.o4-list .o4-episode-summary{-webkit-line-clamp:3}.o4-list .o4-copy{padding:.8em 1em}'+
+                '.o4-list.o4-row-focused .o4-row:not(.focus){opacity:.67}.o4-list .o4-row.focus{background:rgba(53,61,65,.96)}'
+            ).appendTo('head');
             if (!$('#open4k-episode-style').length) $('<style id="open4k-episode-style"></style>').text(
                 '.o4-episode .o4-frame{position:relative;flex:0 0 10.7em;align-self:stretch;min-height:6.1em;background:rgba(255,255,255,.05)}'+
                 '.o4-row .o4-frame img{position:absolute;width:100%;height:100%;object-fit:cover}.o4-frame img:not([src]){display:none}'+
@@ -1509,7 +1552,7 @@
             return root;
         };
         this.start = function () {
-            startContentNavigation(focus,rightFromList);
+            startContentNavigation(focus,rightFromList,stepRow);
         };
         this.render = function () { return root; };
         this.pause = this.stop = function () {};
