@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('2b7dc2e97916d4ff82a68ce8c521501a96efc69177a208138bcfc4dab62057b5'));
+}('7bc0d076924355f197dde8587881bfa9d25f26c72f5a7a418c5eb27ba5a82b6c'));
 
 (function () {
     'use strict';
@@ -1204,8 +1204,9 @@
         function focus() {
             if (!alive || lampa.Activity.active().activity !== self.activity || lampa.Player.opened && lampa.Player.opened()) return;
             refreshHistory();
+            var target = last && $.contains(root[0],last) ? last : list.children('.o4-row')[0] || sourceButton[0];
             lampa.Controller.collectionSet(root);
-            lampa.Controller.collectionFocus(last && $.contains(root[0],last) ? last : sourceButton[0], root);
+            lampa.Controller.collectionFocus(target,root);
         }
         function drawer(label, choices, pick) {
             lampa.Select.show({title:label, items:choices, onSelect:function (row) {
@@ -1339,6 +1340,7 @@
             } catch (error) { delete loadingInfo[number]; }
         }
         function draw(rows,notice) {
+            var openingList = !list.children('.o4-row').length;
             var selectedUrl = last && $.contains(list[0],last) ? $(last).data('o4-url') : null;
             var previousIndex = selectedUrl != null ? list.children('.o4-row').index(last) : -1;
             list.empty();
@@ -1378,7 +1380,8 @@
                 }
                 tag(copy,'o4-detail',row.subtitle);
             });
-            if (previousIndex >= 0 && rows.length && last.parentNode !== list[0]) {
+            if (openingList && rows.length) last = list.children('.o4-row')[0];
+            else if (previousIndex >= 0 && rows.length && last.parentNode !== list[0]) {
                 last = list.children('.o4-row')[Math.min(previousIndex,rows.length-1)];
             }
             visibleSeasons.forEach(loadEpisodeInfo);
