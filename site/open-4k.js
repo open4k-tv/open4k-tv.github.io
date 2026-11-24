@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('5355e5edbe50e12b96acbc4f81dce6d1e2b814b2778eb8ee5e9015b9620f72d6'));
+}('639ad301e9a4890772e455b7c5d6f2c3e11b341cf554f7b3611d864a30e2b8b0'));
 
 (function () {
     'use strict';
@@ -117,8 +117,7 @@
         'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>';
     var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB',
-        http4khdhub:'4KHDHub (тест)',httpCineDoze:'CineDoze (тест)'};
-    function isTestCatalog(key) { return key === 'http4khdhub' || key === 'httpCineDoze'; }
+        httpCineDoze:'CineDoze (тест)'};
 
     var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
 
@@ -1199,7 +1198,7 @@
         req.onerror = req.ontimeout = req.onabort = function () { done(false); };
         req.send();
     }
-    function testUhdCatalog(key,movie,current,done) {
+    function cineDozeCatalog(movie,current,done) {
         if (isSeries(movie)) { done(null); return; }
         var card = Object.assign({},movie,{kp_id:null,kinopoisk_id:null});
         resolveMovieIds(card,function (ids) {
@@ -1208,13 +1207,13 @@
             if (!imdb) { done(null); return; }
             var provider = {provider:'httpstreaming'};
             'http4khdhub httpUHDMovies httpHDHub4u httpMoviesDrive httpMKVCinemas httpCineDoze httpMalluMv httpVixSrc httpMoviesMod httpMoviesLeech httpAnimeFlix http111477 httpXDMovies httpPixeldrain httpMkvBase httpVadapav httpInternetArchive'.split(' ').forEach(function (name) {
-                provider[name] = name === key;
+                provider[name] = name === 'httpCineDoze';
             });
             var config = {DebridServices:[provider],Languages:[],Resolutions:[],Scrapers:[],IndexerScrapers:[],ScrapersConfigured:true};
             var url = 'https://sooti.click/'+encodeURIComponent(JSON.stringify(config))+'/stream/movie/'+imdb.slice(5)+'.json';
             readResponse(url,25000,function (r) { return JSON.parse(r.responseText).streams; },function (streams) {
                 if (!current()) return;
-                var brand = key === 'http4khdhub' ? '4KHDHub' : 'CineDoze';
+                var brand = 'CineDoze';
                 var candidates = (Array.isArray(streams) ? streams : []).filter(function (s) {
                     return s && /^https:\/\/sooti\.click\//i.test(s.url) && /\b(?:4k|2160p)\b/i.test(s.name) &&
                         String(s.title || '').trim().toLowerCase().endsWith('| '+brand.toLowerCase());
@@ -1232,12 +1231,12 @@
                         }
                         next(ok);
                     });
-                },function (ok) { done(ok ? {title:names[key],rows:[row],quality:function () { return 2160; }} : null); },current);
+                },function (ok) { done(ok ? {title:names.httpCineDoze,rows:[row],quality:function () { return 2160; }} : null); },current);
             });
         });
     }
     function availableSource(key,movie,label,current,done,quick,screenOpen) {
-        if (isTestCatalog(key)) { testUhdCatalog(key,movie,current,done); return; }
+        if (key === 'httpCineDoze') { cineDozeCatalog(movie,current,done); return; }
         if (key !== 'collaps') {
             onlineSource(key,movie,function (found) {
                 done(found && (found.seasons || found.rows && found.rows.length) ? found : null);
@@ -1275,8 +1274,8 @@
         var pref = lampa.Storage.get('open4k_default_source', 'cdnvideohub');
         var sources = names;
         var order = ['cdnvideohub','collaps','lordfilm','hdvb'];
-        if (!isSeries(movie)) order.push('http4khdhub','httpCineDoze');
-        if (isSeries(movie) && isTestCatalog(pref)) pref = 'cdnvideohub';
+        if (!isSeries(movie)) order.push('httpCineDoze');
+        if (isSeries(movie) && pref === 'httpCineDoze') pref = 'cdnvideohub';
         if (!Object.prototype.hasOwnProperty.call(names,pref)) {
             pref = 'cdnvideohub';
             lampa.Storage.set('open4k_default_source',pref);
@@ -1332,7 +1331,7 @@
                 lampa.Controller.toggle('content'); pick(row);
             }, onBack:function () { lampa.Controller.toggle('content'); }});
         }
-        var sourceLabels = Object.create(null);
+        var sourceLabels = Object.create(null), pendingCineRow;
         function qualityStatus(key) {
             var found = verified[key], tier = found && found.quality();
             if (tier) return qualityLabel(tier)+(isSeries(movie) ? ' · по проверенной серии' : '');
@@ -1342,15 +1341,28 @@
         }
         function refreshSourceLabel(key) {
             if (sourceLabels[key]) sourceLabels[key].text(qualityStatus(key));
+            if (key === 'httpCineDoze' && verified[key] && pendingCineRow) {
+                var row = pendingCineRow;
+                pendingCineRow = null;
+                row.show();
+                if (lampa.Select.render && (lampa.Controller.enabled() || {}).name === 'select') {
+                    var menu = lampa.Select.render();
+                    if (menu && menu[0] && $.contains(menu[0],row[0])) lampa.Controller.collectionSet(menu);
+                }
+            }
             if (key === source && displayed && verified[key])
                 sourceButton.text('Источник · '+withQuality(sources[key],verified[key].quality()));
         }
         function chooseSource() {
-            var keys = order.filter(function (key) { return verified[key] || !checked[key] && !isTestCatalog(key); });
+            var keys = order.filter(function (key) { return verified[key] || !checked[key]; });
             if (!keys.length) { lampa.Noty.show(pending() ? 'Проверяем доступность видео…' : 'Нет доступного видео'); return; }
             drawer('Источник', keys.map(function (key) {
                 return {title:sources[key],subtitle:qualityStatus(key),key:key,selected:key === source,
-                    onDraw:function (item) { sourceLabels[key] = item.find('.selectbox-item__subtitle'); refreshSourceLabel(key); }};
+                    onDraw:function (item) {
+                        if (key === 'httpCineDoze' && !verified[key] && keys.length > 1) pendingCineRow = item.hide();
+                        sourceLabels[key] = item.find('.selectbox-item__subtitle');
+                        refreshSourceLabel(key);
+                    }};
             }), function (row) {
                 if (verified[row.key]) displaySource(row.key);
                 else if (!checked[row.key]) {
