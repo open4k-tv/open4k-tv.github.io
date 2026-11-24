@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('68f1c7477c8b41adee67e57a8929c0648756327a3b103e1d6c3f8bf27a68f514'));
+}('5355e5edbe50e12b96acbc4f81dce6d1e2b814b2778eb8ee5e9015b9620f72d6'));
 
 (function () {
     'use strict';
@@ -117,8 +117,8 @@
         'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>';
     var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB',
-        http4khdhub:'4KHDHub (тест)',httpUHDMovies:'UHDMovies (тест)'};
-    function isTestCatalog(key) { return key === 'http4khdhub' || key === 'httpUHDMovies'; }
+        http4khdhub:'4KHDHub (тест)',httpCineDoze:'CineDoze (тест)'};
+    function isTestCatalog(key) { return key === 'http4khdhub' || key === 'httpCineDoze'; }
 
     var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
 
@@ -1214,10 +1214,10 @@
             var url = 'https://sooti.click/'+encodeURIComponent(JSON.stringify(config))+'/stream/movie/'+imdb.slice(5)+'.json';
             readResponse(url,25000,function (r) { return JSON.parse(r.responseText).streams; },function (streams) {
                 if (!current()) return;
-                var brand = key === 'http4khdhub' ? '4KHDHub' : 'UHDMovies';
+                var brand = key === 'http4khdhub' ? '4KHDHub' : 'CineDoze';
                 var candidates = (Array.isArray(streams) ? streams : []).filter(function (s) {
                     return s && /^https:\/\/sooti\.click\//i.test(s.url) && /\b(?:4k|2160p)\b/i.test(s.name) &&
-                        String(s.title || '').toLowerCase().endsWith('| '+brand.toLowerCase());
+                        String(s.title || '').trim().toLowerCase().endsWith('| '+brand.toLowerCase());
                 });
                 var row;
                 anyAvailable(candidates,function (s,next) {
@@ -1275,7 +1275,7 @@
         var pref = lampa.Storage.get('open4k_default_source', 'cdnvideohub');
         var sources = names;
         var order = ['cdnvideohub','collaps','lordfilm','hdvb'];
-        if (!isSeries(movie)) order.push('http4khdhub','httpUHDMovies');
+        if (!isSeries(movie)) order.push('http4khdhub','httpCineDoze');
         if (isSeries(movie) && isTestCatalog(pref)) pref = 'cdnvideohub';
         if (!Object.prototype.hasOwnProperty.call(names,pref)) {
             pref = 'cdnvideohub';
