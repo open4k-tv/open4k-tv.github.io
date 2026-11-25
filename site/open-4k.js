@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('05c4f16206c6819e443ea1fe0e5b2742d856568a2028b5831d79540a0ce229c6'));
+}('a47babcacd75d78ab551e4704747b7736242a9193f6af2eec865a916d6b04867'));
 
 (function () {
     'use strict';
@@ -116,8 +116,7 @@
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
         'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>';
-    var trialSources = {vkmovie:'VK Видео (тест)',rutubemovie:'RUTUBE (тест)',videodb:'VideoDB (тест)'};
-    var names = Object.assign({collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB'},trialSources);
+    var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB'};
 
     var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
 
@@ -751,10 +750,7 @@
         }
         function mediaUrl(url) {
             if (typeof url !== 'string') return false;
-            if (/^https:\/\/z01\.online\/proxy\/[^\s<>"]+$/.test(url)) return true;
-            if (key === 'vkmovie') return /^https:\/\/(?:[\w-]+\.)+(?:vkuser(net|video)\.ru|userapi\.com|mycdn\.me)\/[^\s<>"]+$/.test(url);
-            if (key === 'rutubemovie') return /^https:\/\/(?:[\w-]+\.)+rutube\.ru\/[^\s<>"]+$/.test(url);
-            return false;
+            return /^https:\/\/z01\.online\/proxy\/[^\s<>"]+$/.test(url);
         }
         function unavailable() { lampa.Noty.show('Источник не вернул доступное видео'); }
         function qualities(item,label,vast,valid,ready,failed,limit) {
@@ -1160,7 +1156,7 @@
         if (key !== 'collaps') {
             onlineSource(key,movie,function (found) {
                 done(found && (found.seasons || found.rows && found.rows.length) ? found : null);
-            },current,null,label,true,quick && !trialSources[key],screenOpen);
+            },current,null,label,true,quick,screenOpen);
             return;
         }
         resolveMovieIds(movie,function (ids) {
@@ -1193,7 +1189,7 @@
         var query = title, alive = true, last;
         var pref = lampa.Storage.get('open4k_default_source', 'cdnvideohub');
         var sources = names;
-        var order = ['cdnvideohub','collaps','lordfilm','hdvb'].concat(Object.keys(trialSources));
+        var order = ['cdnvideohub','collaps','lordfilm','hdvb'];
         if (!Object.prototype.hasOwnProperty.call(names,pref)) {
             pref = 'cdnvideohub';
             lampa.Storage.set('open4k_default_source',pref);
@@ -1262,20 +1258,14 @@
             if (key === source && displayed && verified[key])
                 sourceButton.text('Источник · '+withQuality(sources[key],verified[key].quality()));
         }
-        function sourceChoices(keys) {
-            return keys.map(function (key) {
+        function chooseSource() {
+            var keys = order.filter(function (key) { return verified[key] || !checked[key]; });
+            if (!keys.length) { lampa.Noty.show(pending() ? 'Проверяем доступность видео…' : 'Нет доступного видео'); return; }
+            drawer('Источник', keys.map(function (key) {
                 return {title:sources[key],subtitle:qualityStatus(key),key:key,selected:key === source,
                     onDraw:function (item) { sourceLabels[key] = item.find('.selectbox-item__subtitle'); refreshSourceLabel(key); }};
-            });
-        }
-        function chooseSource() {
-            var keys = order.filter(function (key) { return trialSources[key] || verified[key] || !checked[key]; });
-            drawer('Источник',sourceChoices(keys),function (row) {
+            }), function (row) {
                 if (verified[row.key]) displaySource(row.key);
-                else if (trialSources[row.key]) {
-                    lampa.Noty.show(checked[row.key] ? 'Для этой карточки доступный поток не найден' : 'Проверка ещё идёт');
-                    chooseSource();
-                }
                 else if (!checked[row.key]) {
                     preferred = row.key; source = row.key; displayed = false;
                     ++seasonRevision; seasonButton.hide();
