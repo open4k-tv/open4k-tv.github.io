@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('a47babcacd75d78ab551e4704747b7736242a9193f6af2eec865a916d6b04867'));
+}('0b09641a0d2f1ef3867042d5d484d856c21fa495c02b5e41ba060f026d47b617'));
 
 (function () {
     'use strict';
@@ -116,7 +116,7 @@
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
         'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>';
-    var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB'};
+    var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB',archive:'Internet Archive (тест)'};
 
     var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
 
@@ -1152,7 +1152,35 @@
         });
     }
 
+    var archiveSamples = [
+        {tmdb:'822119',imdb:'tt14513804',minutes:118,
+            item:'how.to.-train.-your.-dragon.-2025.-multi.-hdr.-2160p.-web.-h-265-lucky.-sanet.-st_20260111',
+            file:'Captain.America.Brave.New.World.2025.2160p.SDR.mkv'},
+        {tmdb:'58474',imdb:'tt2395695',season:1,episode:1,minutes:46,
+            item:'cosmos-a-spacetime-odyssey-2014-ai-2160p-x-265',
+            file:'Cosmos A Spacetime Odyssey (2014) EP01 - Standing Up in the Milky Way (AI 2160p x265 10bit) [Multi-Audio] [Multi-Sub].mkv'}
+    ];
+    function archiveSample(movie) {
+        var imdb = movie.imdb_id || (movie.external_ids || {}).imdb_id;
+        var tmdb = movie.tmdb_id || ((!movie.source || movie.source === 'tmdb') && movie.id);
+        return archiveSamples.find(function (sample) {
+            return !!sample.episode === isSeries(movie) && (imdb ? imdb === sample.imdb : String(tmdb) === sample.tmdb);
+        });
+    }
+    function archiveSource(movie,sample) {
+        if (!sample) return null;
+        var url = 'https://archive.org/download/'+sample.item+'/'+encodeURIComponent(sample.file);
+        var title = cardTitle(movie)+(sample.episode ? ' · S1:E1' : '');
+        var row = {id:url,season:sample.season,episode:sample.episode,tier:2160,
+            title:sample.episode ? 'Серия 1' : 'Русская дорожка',
+            subtitle:'4K'+(sample.episode ? ' (AI-апскейл)' : ' SDR')+' · MKV · русский AC-3',
+            action:function (transition) {
+                startWatching({title:title,url:url,launch_player:'lampa'},movie,sample.season,sample.episode,transition);
+            }};
+        return {title:names.archive,rows:[row],quality:function () { return row.tier; },minutes:function () { return sample.minutes; }};
+    }
     function availableSource(key,movie,label,current,done,quick,screenOpen) {
+        if (key === 'archive') { done(archiveSource(movie,archiveSample(movie))); return; }
         if (key !== 'collaps') {
             onlineSource(key,movie,function (found) {
                 done(found && (found.seasons || found.rows && found.rows.length) ? found : null);
@@ -1190,6 +1218,7 @@
         var pref = lampa.Storage.get('open4k_default_source', 'cdnvideohub');
         var sources = names;
         var order = ['cdnvideohub','collaps','lordfilm','hdvb'];
+        if (archiveSample(movie)) order.push('archive');
         if (!Object.prototype.hasOwnProperty.call(names,pref)) {
             pref = 'cdnvideohub';
             lampa.Storage.set('open4k_default_source',pref);
@@ -1634,7 +1663,7 @@
                     });
                 }
                 if (found) found.action(null,isSeries(movie) ? null : alternatives);
-                else if (movie.release_date) alternatives();
+                else if (movie.release_date || archiveSample(movie)) alternatives();
                 else lampa.Noty.show('Для этой карточки нет доступных источников');
         });
     }
