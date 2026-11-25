@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('bb8b65006ca26f12adec6d6b411a460b3216e2d8281e6ad83b084283b94e86aa'));
+}('05c4f16206c6819e443ea1fe0e5b2742d856568a2028b5831d79540a0ce229c6'));
 
 (function () {
     'use strict';
@@ -1262,14 +1262,20 @@
             if (key === source && displayed && verified[key])
                 sourceButton.text('Источник · '+withQuality(sources[key],verified[key].quality()));
         }
-        function chooseSource() {
-            var keys = order.filter(function (key) { return verified[key] || !trialSources[key] && !checked[key]; });
-            if (!keys.length) { lampa.Noty.show(pending() ? 'Проверяем доступность видео…' : 'Нет доступного видео'); return; }
-            drawer('Источник', keys.map(function (key) {
+        function sourceChoices(keys) {
+            return keys.map(function (key) {
                 return {title:sources[key],subtitle:qualityStatus(key),key:key,selected:key === source,
                     onDraw:function (item) { sourceLabels[key] = item.find('.selectbox-item__subtitle'); refreshSourceLabel(key); }};
-            }), function (row) {
+            });
+        }
+        function chooseSource() {
+            var keys = order.filter(function (key) { return trialSources[key] || verified[key] || !checked[key]; });
+            drawer('Источник',sourceChoices(keys),function (row) {
                 if (verified[row.key]) displaySource(row.key);
+                else if (trialSources[row.key]) {
+                    lampa.Noty.show(checked[row.key] ? 'Для этой карточки доступный поток не найден' : 'Проверка ещё идёт');
+                    chooseSource();
+                }
                 else if (!checked[row.key]) {
                     preferred = row.key; source = row.key; displayed = false;
                     ++seasonRevision; seasonButton.hide();
