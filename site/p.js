@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('639ad301e9a4890772e455b7c5d6f2c3e11b341cf554f7b3611d864a30e2b8b0'));
+}('a47babcacd75d78ab551e4704747b7736242a9193f6af2eec865a916d6b04867'));
 
 (function () {
     'use strict';
@@ -116,8 +116,7 @@
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
         'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>';
-    var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB',
-        httpCineDoze:'CineDoze (тест)'};
+    var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB'};
 
     var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
 
@@ -1153,90 +1152,7 @@
         });
     }
 
-    function uhdTrackWidth(buffer) {
-        var bytes = new Uint8Array(buffer);
-        function field(pos,strip) {
-            var mask = 128, n = 1;
-            while (mask && !(bytes[pos] & mask)) { mask >>= 1; n++; }
-            if (!mask || pos+n > bytes.length || (!strip && n > 4)) return null;
-            var value = strip ? bytes[pos] & (mask-1) : bytes[pos];
-            for (var i=1;i<n;i++) value = value*256+bytes[pos+i];
-            return {value:value,end:pos+n};
-        }
-        function find(start,end,path,depth) {
-            while (start < end) {
-                var id = field(start,false), size = id && field(id.end,true);
-                if (!size || size.end > end) return 0;
-                var stop = Math.min(end,size.end+size.value);
-                if (id.value === path[depth]) {
-                    if (depth === path.length-1 && size.value <= 4 && stop-size.end === size.value) {
-                        var width = 0;
-                        for (var i=size.end;i<stop;i++) width = width*256+bytes[i];
-                        return width;
-                    }
-                    if (depth < path.length-1) {
-                        var found = find(size.end,stop,path,depth+1);
-                        if (found) return found;
-                    }
-                }
-                start = stop;
-            }
-            return 0;
-        }
-        if (bytes.length < 4 || new DataView(buffer).getUint32(0) !== 0x1a45dfa3) return 0;
-        return find(0,bytes.length,[0x18538067,0x1654ae6b,0xae,0xe0,0xb0],0);
-    }
-    function probeUhdFile(url,done) {
-        var req = new XMLHttpRequest(), limit = 131072;
-        req.open('GET',url,true);
-        req.responseType = 'arraybuffer';
-        req.timeout = 14000;
-        req.setRequestHeader('Range','bytes=0-'+(limit-1));
-        req.onreadystatechange = function () { if (req.readyState === 2 && req.status !== 206) req.abort(); };
-        req.onprogress = function (e) { if (e.loaded > limit) req.abort(); };
-        req.onload = function () { done(req.status === 206 && req.response && uhdTrackWidth(req.response) >= 3840); };
-        req.onerror = req.ontimeout = req.onabort = function () { done(false); };
-        req.send();
-    }
-    function cineDozeCatalog(movie,current,done) {
-        if (isSeries(movie)) { done(null); return; }
-        var card = Object.assign({},movie,{kp_id:null,kinopoisk_id:null});
-        resolveMovieIds(card,function (ids) {
-            if (!current()) return;
-            var imdb = ids.find(function (id) { return id.indexOf('imdb/') === 0; });
-            if (!imdb) { done(null); return; }
-            var provider = {provider:'httpstreaming'};
-            'http4khdhub httpUHDMovies httpHDHub4u httpMoviesDrive httpMKVCinemas httpCineDoze httpMalluMv httpVixSrc httpMoviesMod httpMoviesLeech httpAnimeFlix http111477 httpXDMovies httpPixeldrain httpMkvBase httpVadapav httpInternetArchive'.split(' ').forEach(function (name) {
-                provider[name] = name === 'httpCineDoze';
-            });
-            var config = {DebridServices:[provider],Languages:[],Resolutions:[],Scrapers:[],IndexerScrapers:[],ScrapersConfigured:true};
-            var url = 'https://sooti.click/'+encodeURIComponent(JSON.stringify(config))+'/stream/movie/'+imdb.slice(5)+'.json';
-            readResponse(url,25000,function (r) { return JSON.parse(r.responseText).streams; },function (streams) {
-                if (!current()) return;
-                var brand = 'CineDoze';
-                var candidates = (Array.isArray(streams) ? streams : []).filter(function (s) {
-                    return s && /^https:\/\/sooti\.click\//i.test(s.url) && /\b(?:4k|2160p)\b/i.test(s.name) &&
-                        String(s.title || '').trim().toLowerCase().endsWith('| '+brand.toLowerCase());
-                });
-                var row;
-                anyAvailable(candidates,function (s,next) {
-                    probeUhdFile(s.url,function (ok) {
-                        if (ok) {
-                            var release = String(s.behaviorHints && s.behaviorHints.fileName || s.title);
-                            var audio = [['Русский',/\b(?:rus|russian)\b/i],['Английский',/\b(?:eng|english)\b/i],
-                                ['Хинди',/\bhindi\b/i],['Тамильский',/\btamil\b/i],['Телугу',/\btelugu\b/i]]
-                                .filter(function (pair) { return pair[1].test(release); }).map(function (pair) { return pair[0]; });
-                            row = {id:s.url,tier:2160,title:audio.join(' · ') || 'Язык не указан',subtitle:brand+' · 4K · MKV',
-                                action:function () { startWatching({title:cardTitle(movie),url:s.url,launch_player:'lampa'},movie); }};
-                        }
-                        next(ok);
-                    });
-                },function (ok) { done(ok ? {title:names.httpCineDoze,rows:[row],quality:function () { return 2160; }} : null); },current);
-            });
-        });
-    }
     function availableSource(key,movie,label,current,done,quick,screenOpen) {
-        if (key === 'httpCineDoze') { cineDozeCatalog(movie,current,done); return; }
         if (key !== 'collaps') {
             onlineSource(key,movie,function (found) {
                 done(found && (found.seasons || found.rows && found.rows.length) ? found : null);
@@ -1274,8 +1190,6 @@
         var pref = lampa.Storage.get('open4k_default_source', 'cdnvideohub');
         var sources = names;
         var order = ['cdnvideohub','collaps','lordfilm','hdvb'];
-        if (!isSeries(movie)) order.push('httpCineDoze');
-        if (isSeries(movie) && pref === 'httpCineDoze') pref = 'cdnvideohub';
         if (!Object.prototype.hasOwnProperty.call(names,pref)) {
             pref = 'cdnvideohub';
             lampa.Storage.set('open4k_default_source',pref);
@@ -1331,7 +1245,7 @@
                 lampa.Controller.toggle('content'); pick(row);
             }, onBack:function () { lampa.Controller.toggle('content'); }});
         }
-        var sourceLabels = Object.create(null), pendingCineRow;
+        var sourceLabels = Object.create(null);
         function qualityStatus(key) {
             var found = verified[key], tier = found && found.quality();
             if (tier) return qualityLabel(tier)+(isSeries(movie) ? ' · по проверенной серии' : '');
@@ -1341,15 +1255,6 @@
         }
         function refreshSourceLabel(key) {
             if (sourceLabels[key]) sourceLabels[key].text(qualityStatus(key));
-            if (key === 'httpCineDoze' && verified[key] && pendingCineRow) {
-                var row = pendingCineRow;
-                pendingCineRow = null;
-                row.show();
-                if (lampa.Select.render && (lampa.Controller.enabled() || {}).name === 'select') {
-                    var menu = lampa.Select.render();
-                    if (menu && menu[0] && $.contains(menu[0],row[0])) lampa.Controller.collectionSet(menu);
-                }
-            }
             if (key === source && displayed && verified[key])
                 sourceButton.text('Источник · '+withQuality(sources[key],verified[key].quality()));
         }
@@ -1358,11 +1263,7 @@
             if (!keys.length) { lampa.Noty.show(pending() ? 'Проверяем доступность видео…' : 'Нет доступного видео'); return; }
             drawer('Источник', keys.map(function (key) {
                 return {title:sources[key],subtitle:qualityStatus(key),key:key,selected:key === source,
-                    onDraw:function (item) {
-                        if (key === 'httpCineDoze' && !verified[key] && keys.length > 1) pendingCineRow = item.hide();
-                        sourceLabels[key] = item.find('.selectbox-item__subtitle');
-                        refreshSourceLabel(key);
-                    }};
+                    onDraw:function (item) { sourceLabels[key] = item.find('.selectbox-item__subtitle'); refreshSourceLabel(key); }};
             }), function (row) {
                 if (verified[row.key]) displaySource(row.key);
                 else if (!checked[row.key]) {
