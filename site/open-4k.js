@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('a47babcacd75d78ab551e4704747b7736242a9193f6af2eec865a916d6b04867'));
+}('bb8b65006ca26f12adec6d6b411a460b3216e2d8281e6ad83b084283b94e86aa'));
 
 (function () {
     'use strict';
@@ -116,7 +116,8 @@
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
         'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>';
-    var names = {collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB'};
+    var trialSources = {vkmovie:'VK Видео (тест)',rutubemovie:'RUTUBE (тест)',videodb:'VideoDB (тест)'};
+    var names = Object.assign({collaps:'Collaps',lordfilm:'LordFilm',hdvb:'HDVB',cdnvideohub:'VideoHUB'},trialSources);
 
     var vixCatalog, vixLoadedAt = 0, vixWaiting = [];
 
@@ -750,7 +751,10 @@
         }
         function mediaUrl(url) {
             if (typeof url !== 'string') return false;
-            return /^https:\/\/z01\.online\/proxy\/[^\s<>"]+$/.test(url);
+            if (/^https:\/\/z01\.online\/proxy\/[^\s<>"]+$/.test(url)) return true;
+            if (key === 'vkmovie') return /^https:\/\/(?:[\w-]+\.)+(?:vkuser(net|video)\.ru|userapi\.com|mycdn\.me)\/[^\s<>"]+$/.test(url);
+            if (key === 'rutubemovie') return /^https:\/\/(?:[\w-]+\.)+rutube\.ru\/[^\s<>"]+$/.test(url);
+            return false;
         }
         function unavailable() { lampa.Noty.show('Источник не вернул доступное видео'); }
         function qualities(item,label,vast,valid,ready,failed,limit) {
@@ -1156,7 +1160,7 @@
         if (key !== 'collaps') {
             onlineSource(key,movie,function (found) {
                 done(found && (found.seasons || found.rows && found.rows.length) ? found : null);
-            },current,null,label,true,quick,screenOpen);
+            },current,null,label,true,quick && !trialSources[key],screenOpen);
             return;
         }
         resolveMovieIds(movie,function (ids) {
@@ -1189,7 +1193,7 @@
         var query = title, alive = true, last;
         var pref = lampa.Storage.get('open4k_default_source', 'cdnvideohub');
         var sources = names;
-        var order = ['cdnvideohub','collaps','lordfilm','hdvb'];
+        var order = ['cdnvideohub','collaps','lordfilm','hdvb'].concat(Object.keys(trialSources));
         if (!Object.prototype.hasOwnProperty.call(names,pref)) {
             pref = 'cdnvideohub';
             lampa.Storage.set('open4k_default_source',pref);
@@ -1259,7 +1263,7 @@
                 sourceButton.text('Источник · '+withQuality(sources[key],verified[key].quality()));
         }
         function chooseSource() {
-            var keys = order.filter(function (key) { return verified[key] || !checked[key]; });
+            var keys = order.filter(function (key) { return verified[key] || !trialSources[key] && !checked[key]; });
             if (!keys.length) { lampa.Noty.show(pending() ? 'Проверяем доступность видео…' : 'Нет доступного видео'); return; }
             drawer('Источник', keys.map(function (key) {
                 return {title:sources[key],subtitle:qualityStatus(key),key:key,selected:key === source,
