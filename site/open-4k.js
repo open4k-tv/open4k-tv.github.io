@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('dac4b497974c8a45e5dac80413fab2f5ae74c892ebdec1f0c0fca65b077c055d'));
+}('af946d7c130b26adcf61bb1560fb571b8a8ffa4aa6b035f8adf34992b9862f1d'));
 
 (function () {
     'use strict';
@@ -1167,6 +1167,30 @@
             return !!sample.episode === isSeries(movie) && (imdb ? imdb === sample.imdb : String(tmdb) === sample.tmdb);
         });
     }
+    function prepareArchivePlayer(url) {
+        // Lampa creates its HTML video with anonymous CORS. Archive serves these
+        // direct files as ordinary media, without CORS on the range responses.
+        function cleanup() {
+            document.removeEventListener('loadstart',onLoad,true);
+            clearTimeout(timer);
+        }
+        function onLoad(event) {
+            var video = event.target;
+            if (!video || video.tagName !== 'VIDEO' || video.src !== url ||
+                !video.classList.contains('player-video__video')) return;
+            cleanup();
+            if (!video.hasAttribute('crossorigin')) return;
+            var playing = !video.paused;
+            video.removeAttribute('crossorigin');
+            video.load();
+            if (playing) {
+                var resume = video.play();
+                if (resume && resume.catch) resume.catch(function () {});
+            }
+        }
+        var timer = setTimeout(cleanup,30000);
+        document.addEventListener('loadstart',onLoad,true);
+    }
     function archiveSource(movie,sample,current,done) {
         var url = 'https://archive.org/download/'+sample.item+'/'+encodeURIComponent(sample.file);
         var title = cardTitle(movie)+(sample.episode ? ' · S1:E1' : '');
@@ -1186,6 +1210,7 @@
                 title:sample.episode ? 'Серия 1' : 'Воспроизвести',
                 subtitle:qualityLabel(tier)+(sample.episode ? ' (AI-апскейл)' : '')+' · '+sample.file.split('.').pop().toUpperCase(),
                 action:function (transition) {
+                    prepareArchivePlayer(url);
                     startWatching({title:title,url:url,launch_player:'lampa'},movie,sample.season,sample.episode,transition);
                 }};
             done({title:names.archive,rows:[row],quality:function () { return row.tier; },minutes:function () { return minutes; }});
