@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('8411fad2c87aac6531d6d482c9e06f008a29df7d20d7c4eccea98f9cf69a4834'));
+}('7834326fe35819fee34225b90f05655f4ccdf5dbd6b73cd5d21cbb20aad37467'));
 
 (function () {
     'use strict';
@@ -1153,7 +1153,7 @@
     }
 
     var archiveSamples = [
-        {tmdb:'822119',imdb:'tt14513804',minutes:118,
+        {tmdb:'822119',imdb:'tt14513804',kp:'4443920',minutes:118,
             item:'how.to.-train.-your.-dragon.-2025.-multi.-hdr.-2160p.-web.-h-265-lucky.-sanet.-st_20260111',
             file:'Captain.America.Brave.New.World.2025.2160p.SDR.mkv'},
         {tmdb:'58474',imdb:'tt2395695',season:1,episode:1,minutes:46,
@@ -1163,8 +1163,10 @@
     function archiveSample(movie) {
         var imdb = movie.imdb_id || (movie.external_ids || {}).imdb_id;
         var tmdb = movie.tmdb_id || ((!movie.source || movie.source === 'tmdb') && movie.id);
+        var kp = movie.kinopoisk_id || movie.kp_id;
         return archiveSamples.find(function (sample) {
-            return !!sample.episode === isSeries(movie) && (imdb ? imdb === sample.imdb : String(tmdb) === sample.tmdb);
+            return !!sample.episode === isSeries(movie) && (imdb === sample.imdb || String(tmdb) === sample.tmdb ||
+                sample.kp && String(kp) === sample.kp);
         });
     }
     function prepareArchivePlayer(url) {
@@ -1368,6 +1370,7 @@
         function qualityStatus(key) {
             var found = verified[key], tier = found && found.quality();
             if (tier) return qualityLabel(tier)+(isSeries(movie) ? ' · по проверенной серии' : '');
+            if (key === 'archive' && !found) return checked[key] ? 'Видео недоступно · проверить ещё раз' : 'Проверяем доступность видео…';
             if (!found && checked[key]) return 'Источник недоступен';
             if (!found || found.more || found.probeQuality && !found.probeDone) return 'Проверяем качество…';
             return 'Качество не определено';
@@ -1378,13 +1381,18 @@
                 sourceButton.text('Источник · '+withQuality(sources[key],verified[key].quality()));
         }
         function chooseSource() {
-            var keys = order.filter(function (key) { return verified[key] || key !== 'archive' && !checked[key]; });
+            var keys = order.filter(function (key) { return key === 'archive' || verified[key] || !checked[key]; });
             if (!keys.length) { lampa.Noty.show(pending() ? 'Проверяем доступность видео…' : 'Нет доступного видео'); return; }
             drawer('Источник', keys.map(function (key) {
                 return {title:sources[key],subtitle:qualityStatus(key),key:key,selected:key === source,
                     onDraw:function (item) { sourceLabels[key] = item.find('.selectbox-item__subtitle'); refreshSourceLabel(key); }};
             }), function (row) {
                 if (verified[row.key]) displaySource(row.key);
+                else if (row.key === 'archive' && checked.archive) {
+                    delete checked.archive;
+                    startCheck('archive');
+                    chooseSource();
+                }
                 else if (!checked[row.key]) {
                     preferred = row.key; source = row.key; displayed = false;
                     ++seasonRevision; seasonButton.hide();
