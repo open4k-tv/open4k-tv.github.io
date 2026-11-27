@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('0b09641a0d2f1ef3867042d5d484d856c21fa495c02b5e41ba060f026d47b617'));
+}('dac4b497974c8a45e5dac80413fab2f5ae74c892ebdec1f0c0fca65b077c055d'));
 
 (function () {
     'use strict';
@@ -1167,20 +1167,88 @@
             return !!sample.episode === isSeries(movie) && (imdb ? imdb === sample.imdb : String(tmdb) === sample.tmdb);
         });
     }
-    function archiveSource(movie,sample) {
-        if (!sample) return null;
+    function archiveSource(movie,sample,current,done) {
         var url = 'https://archive.org/download/'+sample.item+'/'+encodeURIComponent(sample.file);
         var title = cardTitle(movie)+(sample.episode ? ' · S1:E1' : '');
-        var row = {id:url,season:sample.season,episode:sample.episode,tier:2160,
-            title:sample.episode ? 'Серия 1' : 'Русская дорожка',
-            subtitle:'4K'+(sample.episode ? ' (AI-апскейл)' : ' SDR')+' · MKV · русский AC-3',
-            action:function (transition) {
-                startWatching({title:title,url:url,launch_player:'lampa'},movie,sample.season,sample.episode,transition);
-            }};
-        return {title:names.archive,rows:[row],quality:function () { return row.tier; },minutes:function () { return sample.minutes; }};
+        var video = document.createElement('video'), finished = false;
+        var timer = setTimeout(function () { finish(false); },12000);
+        function finish(ok) {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            var tier = qualityTier(video.videoWidth,video.videoHeight), minutes = Math.round(video.duration/60);
+            video.onloadeddata = video.onerror = null;
+            video.removeAttribute('src');
+            video.load();
+            if (!current()) return;
+            if (!ok || !tier || !minutes || Math.abs(sample.minutes-minutes)>2) { done(null); return; }
+            var row = {id:url,season:sample.season,episode:sample.episode,tier:tier,
+                title:sample.episode ? 'Серия 1' : 'Воспроизвести',
+                subtitle:qualityLabel(tier)+(sample.episode ? ' (AI-апскейл)' : '')+' · '+sample.file.split('.').pop().toUpperCase(),
+                action:function (transition) {
+                    startWatching({title:title,url:url,launch_player:'lampa'},movie,sample.season,sample.episode,transition);
+                }};
+            done({title:names.archive,rows:[row],quality:function () { return row.tier; },minutes:function () { return minutes; }});
+        }
+        video.preload = 'auto';
+        video.muted = true;
+        video.onloadeddata = function () { finish(true); };
+        video.onerror = function () { finish(false); };
+        video.src = url;
+        video.load();
+    }
+    function searchArchive(movie,current,done) {
+        var query = catalogQuery(movie);
+        if (query.serial || !/^\d{4}$/.test(query.year)) { done(null); return; }
+        function normalize(text) { return String(text || '').toLowerCase().replace(/ё/g,'е').replace(/[^a-z0-9а-я]+/gi,' ').trim(); }
+        var titles = [query.title,query.original_title].map(normalize).filter(Boolean);
+        if (!titles.length) { done(null); return; }
+        var search = 'mediatype:movies AND year:'+query.year+' AND (language:rus OR language:Russian) AND ('+
+            titles.map(function (title) { return 'title:"'+title+'"'; }).join(' OR ')+')';
+        readCatalog('https://archive.org/advancedsearch.php?output=json&rows=10&fl[]=identifier&fl[]=title&q='+encodeURIComponent(search),function (data) {
+            if (!current()) return;
+            var hits = (data && data.response && data.response.docs || []).filter(function (hit) {
+                var name = normalize(hit.title);
+                return /^[\w.-]+$/.test(hit.identifier) && titles.some(function (title) {
+                    return name === title || name === title+' '+query.year;
+                });
+            }).slice(0,3);
+            function next() {
+                if (!current()) return;
+                var hit = hits.shift();
+                if (!hit) { done(null); return; }
+                readCatalog('https://archive.org/metadata/'+hit.identifier,function (record) {
+                    if (!current()) return;
+                    var files = record && record.files || [];
+                    var candidates = files.filter(function (f) {
+                        if (f.private || !/\.mp4$/i.test(f.name) || +f.width < 1280 || +f.length < 600) return false;
+                        if (movie.runtime && Math.abs(f.length/60-movie.runtime)>5) return false;
+                        var base = normalize(f.name.slice(0,-4));
+                        return titles.some(function (title) { return base === title || base.indexOf(title+' ') === 0; }) &&
+                            !/(^| )(trailer|teaser|sample|review|interview|трейлер|обзор)( |$)/.test(base);
+                    }).sort(function (a,b) { return b.width-a.width; }).slice(0,2);
+                    function tryFile() {
+                        var f = candidates.shift();
+                        if (!f) { next(); return; }
+                        archiveSource(movie,{item:hit.identifier,file:f.name,minutes:Math.round(f.length/60)},current,function (result) {
+                            if (result) done(result); else tryFile();
+                        });
+                    }
+                    tryFile();
+                });
+            }
+            next();
+        });
     }
     function availableSource(key,movie,label,current,done,quick,screenOpen) {
-        if (key === 'archive') { done(archiveSource(movie,archiveSample(movie))); return; }
+        if (key === 'archive') {
+            var sample = archiveSample(movie);
+            if (sample) archiveSource(movie,sample,current,function (result) {
+                if (result) done(result); else searchArchive(movie,current,done);
+            });
+            else searchArchive(movie,current,done);
+            return;
+        }
         if (key !== 'collaps') {
             onlineSource(key,movie,function (found) {
                 done(found && (found.seasons || found.rows && found.rows.length) ? found : null);
@@ -1218,7 +1286,7 @@
         var pref = lampa.Storage.get('open4k_default_source', 'cdnvideohub');
         var sources = names;
         var order = ['cdnvideohub','collaps','lordfilm','hdvb'];
-        if (archiveSample(movie)) order.push('archive');
+        if (!isSeries(movie) || archiveSample(movie)) order.push('archive');
         if (!Object.prototype.hasOwnProperty.call(names,pref)) {
             pref = 'cdnvideohub';
             lampa.Storage.set('open4k_default_source',pref);
@@ -1288,7 +1356,7 @@
                 sourceButton.text('Источник · '+withQuality(sources[key],verified[key].quality()));
         }
         function chooseSource() {
-            var keys = order.filter(function (key) { return verified[key] || !checked[key]; });
+            var keys = order.filter(function (key) { return verified[key] || key !== 'archive' && !checked[key]; });
             if (!keys.length) { lampa.Noty.show(pending() ? 'Проверяем доступность видео…' : 'Нет доступного видео'); return; }
             drawer('Источник', keys.map(function (key) {
                 return {title:sources[key],subtitle:qualityStatus(key),key:key,selected:key === source,
