@@ -100,7 +100,7 @@
             finish();
         }
     }
-}('af946d7c130b26adcf61bb1560fb571b8a8ffa4aa6b035f8adf34992b9862f1d'));
+}('8411fad2c87aac6531d6d482c9e06f008a29df7d20d7c4eccea98f9cf69a4834'));
 
 (function () {
     'use strict';
@@ -1180,13 +1180,10 @@
                 !video.classList.contains('player-video__video')) return;
             cleanup();
             if (!video.hasAttribute('crossorigin')) return;
-            var playing = !video.paused;
             video.removeAttribute('crossorigin');
             video.load();
-            if (playing) {
-                var resume = video.play();
-                if (resume && resume.catch) resume.catch(function () {});
-            }
+            var resume = video.play();
+            if (resume && resume.catch) resume.catch(function () {});
         }
         var timer = setTimeout(cleanup,30000);
         document.addEventListener('loadstart',onLoad,true);
@@ -1195,7 +1192,7 @@
         var url = 'https://archive.org/download/'+sample.item+'/'+encodeURIComponent(sample.file);
         var title = cardTitle(movie)+(sample.episode ? ' · S1:E1' : '');
         var video = document.createElement('video'), finished = false;
-        var timer = setTimeout(function () { finish(false); },12000);
+        var timer = setTimeout(function () { finish(false); },25000);
         function finish(ok) {
             if (finished) return;
             finished = true;
